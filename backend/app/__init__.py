@@ -1,0 +1,1 @@
+"""Feature Assistant API application."""
