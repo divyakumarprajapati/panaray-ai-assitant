@@ -1,7 +1,7 @@
-"""Embedding generation service using Sentence Transformers."""
+"""Embedding generation service using LangChain HuggingFaceEmbeddings."""
 import logging
 from typing import List
-from sentence_transformers import SentenceTransformer
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from ..config import get_settings
 
@@ -9,17 +9,25 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """Service for generating text embeddings.
+    """Service for generating text embeddings using LangChain.
     
     Follows Single Responsibility Principle - only handles embedding generation.
+    Now using LangChain's HuggingFaceEmbeddings for better integration.
     """
     
     def __init__(self):
-        """Initialize the embedding model."""
+        """Initialize the embedding model using LangChain."""
         settings = get_settings()
-        logger.info(f"Loading embedding model: {settings.embedding_model}")
-        self._model = SentenceTransformer(settings.embedding_model)
-        logger.info("Embedding model loaded successfully")
+        logger.info(f"Loading embedding model via LangChain: {settings.embedding_model}")
+        
+        # Initialize LangChain HuggingFace Embeddings
+        self._embeddings = HuggingFaceEmbeddings(
+            model_name=settings.embedding_model,
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
+        )
+        
+        logger.info("Embedding model loaded successfully via LangChain")
     
     def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text.
@@ -30,8 +38,9 @@ class EmbeddingService:
         Returns:
             List of floats representing the embedding vector
         """
-        embedding = self._model.encode(text, convert_to_tensor=False)
-        return embedding.tolist()
+        # LangChain's embed_query method for single text
+        embedding = self._embeddings.embed_query(text)
+        return embedding
     
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for multiple texts efficiently.
@@ -42,5 +51,15 @@ class EmbeddingService:
         Returns:
             List of embedding vectors
         """
-        embeddings = self._model.encode(texts, convert_to_tensor=False, show_progress_bar=True)
-        return [emb.tolist() for emb in embeddings]
+        # LangChain's embed_documents method for batch processing
+        embeddings = self._embeddings.embed_documents(texts)
+        return embeddings
+    
+    @property
+    def embeddings(self):
+        """Get the underlying LangChain embeddings object.
+        
+        Returns:
+            LangChain HuggingFaceEmbeddings instance
+        """
+        return self._embeddings

@@ -1,6 +1,8 @@
-"""RAG orchestration service combining all components."""
+"""RAG orchestration service using LangGraph state graph pattern."""
 import logging
-from typing import Dict
+from typing import Dict, TypedDict, Annotated
+from langgraph.graph import StateGraph, END
+import operator
 
 from .embedding_service import EmbeddingService
 from .emotion_service import EmotionService
@@ -12,8 +14,30 @@ from ..config import get_settings
 logger = logging.getLogger(__name__)
 
 
+# Define the state structure for LangGraph
+class RAGState(TypedDict):
+    """State structure for the RAG workflow graph.
+    
+    This defines all the data that flows through the LangGraph nodes.
+    """
+    query: str
+    emotion: EmotionResult
+    tone: str
+    query_embedding: list[float]
+    retrieved_docs: list[Dict]
+    filtered_docs: list[Dict]
+    context: list[Dict]
+    answer: str
+    confidence: float
+    sources_used: int
+    error: str | None
+
+
 class RAGService:
-    """Orchestrates RAG pipeline with emotion adaptation.
+    """Orchestrates RAG pipeline using LangGraph state graph pattern.
+    
+    This implementation uses LangGraph to create a stateful, cyclic workflow
+    that manages the RAG pipeline with clear nodes and edges.
     
     Follows Dependency Inversion Principle - depends on abstractions (services).
     Follows Open/Closed Principle - extensible without modification.
@@ -26,7 +50,7 @@ class RAGService:
         llm_service: LLMService,
         vector_service: VectorService
     ):
-        """Initialize RAG service with dependencies.
+        """Initialize RAG service with dependencies and build LangGraph.
         
         Args:
             embedding_service: Service for generating embeddings
@@ -39,10 +63,198 @@ class RAGService:
         self._llm_service = llm_service
         self._vector_service = vector_service
         self._settings = get_settings()
-        logger.info("RAG service initialized")
+        
+        # Build the LangGraph workflow
+        self._graph = self._build_graph()
+        
+        logger.info("RAG service initialized with LangGraph state graph")
+    
+    def _build_graph(self) -> StateGraph:
+        """Build the LangGraph state graph for RAG pipeline.
+        
+        Returns:
+            Compiled LangGraph StateGraph
+        """
+        # Create the graph
+        workflow = StateGraph(RAGState)
+        
+        # Add nodes for each step in the pipeline
+        workflow.add_node("detect_emotion", self._detect_emotion_node)
+        workflow.add_node("generate_embedding", self._generate_embedding_node)
+        workflow.add_node("retrieve_context", self._retrieve_context_node)
+        workflow.add_node("filter_results", self._filter_results_node)
+        workflow.add_node("prepare_context", self._prepare_context_node)
+        workflow.add_node("generate_response", self._generate_response_node)
+        workflow.add_node("calculate_confidence", self._calculate_confidence_node)
+        
+        # Define the workflow edges (execution order)
+        workflow.set_entry_point("detect_emotion")
+        workflow.add_edge("detect_emotion", "generate_embedding")
+        workflow.add_edge("generate_embedding", "retrieve_context")
+        workflow.add_edge("retrieve_context", "filter_results")
+        workflow.add_edge("filter_results", "prepare_context")
+        workflow.add_edge("prepare_context", "generate_response")
+        workflow.add_edge("generate_response", "calculate_confidence")
+        workflow.add_edge("calculate_confidence", END)
+        
+        # Compile the graph
+        return workflow.compile()
+    
+    # Node functions for the LangGraph workflow
+    
+    def _detect_emotion_node(self, state: RAGState) -> Dict:
+        """Node: Detect emotion from query and determine tone.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with emotion and tone
+        """
+        logger.info("Node: Detecting emotion")
+        query = state["query"]
+        
+        emotion_result = self._emotion_service.detect_emotion(query)
+        tone = self._emotion_service.get_tone_for_emotion(emotion_result.emotion)
+        
+        logger.info(f"Detected emotion: {emotion_result.emotion} (tone: {tone})")
+        
+        return {
+            "emotion": emotion_result,
+            "tone": tone
+        }
+    
+    def _generate_embedding_node(self, state: RAGState) -> Dict:
+        """Node: Generate embedding for the query.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with query embedding
+        """
+        logger.info("Node: Generating query embedding")
+        query = state["query"]
+        
+        query_embedding = self._embedding_service.generate_embedding(query)
+        
+        return {
+            "query_embedding": query_embedding
+        }
+    
+    def _retrieve_context_node(self, state: RAGState) -> Dict:
+        """Node: Retrieve similar documents from vector store.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with retrieved documents
+        """
+        logger.info("Node: Retrieving similar documents")
+        query_embedding = state["query_embedding"]
+        
+        similar_docs = self._vector_service.query_similar(
+            query_vector=query_embedding,
+            top_k=self._settings.top_k_results
+        )
+        
+        logger.info(f"Retrieved {len(similar_docs)} documents")
+        
+        return {
+            "retrieved_docs": similar_docs
+        }
+    
+    def _filter_results_node(self, state: RAGState) -> Dict:
+        """Node: Filter documents by similarity threshold.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with filtered documents
+        """
+        logger.info("Node: Filtering results by similarity threshold")
+        retrieved_docs = state["retrieved_docs"]
+        
+        filtered_docs = [
+            doc for doc in retrieved_docs
+            if doc["score"] >= self._settings.similarity_threshold
+        ]
+        
+        logger.info(f"Filtered to {len(filtered_docs)} relevant documents")
+        
+        return {
+            "filtered_docs": filtered_docs
+        }
+    
+    def _prepare_context_node(self, state: RAGState) -> Dict:
+        """Node: Prepare context for LLM from filtered documents.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with prepared context
+        """
+        logger.info("Node: Preparing context for LLM")
+        filtered_docs = state["filtered_docs"]
+        
+        context = [
+            {"content": doc["metadata"].get("content", "")}
+            for doc in filtered_docs
+        ]
+        
+        return {
+            "context": context
+        }
+    
+    async def _generate_response_node(self, state: RAGState) -> Dict:
+        """Node: Generate response using LLM with context and tone.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with generated answer
+        """
+        logger.info("Node: Generating response")
+        query = state["query"]
+        context = state["context"]
+        tone = state["tone"]
+        
+        answer = await self._llm_service.generate_response(
+            query=query,
+            context=context,
+            tone=tone
+        )
+        
+        return {
+            "answer": answer
+        }
+    
+    def _calculate_confidence_node(self, state: RAGState) -> Dict:
+        """Node: Calculate confidence and finalize metadata.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with confidence and sources_used
+        """
+        logger.info("Node: Calculating confidence")
+        filtered_docs = state["filtered_docs"]
+        
+        confidence = self._calculate_confidence(filtered_docs)
+        sources_used = len(filtered_docs)
+        
+        return {
+            "confidence": confidence,
+            "sources_used": sources_used
+        }
     
     async def process_query(self, query: str) -> QueryResponse:
-        """Process a user query through the RAG pipeline.
+        """Process a user query through the LangGraph RAG pipeline.
         
         Args:
             query: User's question
@@ -50,54 +262,47 @@ class RAGService:
         Returns:
             QueryResponse with answer and metadata
         """
-        logger.info(f"Processing query: {query[:50]}...")
+        logger.info(f"Processing query through LangGraph: {query[:50]}...")
         
-        # Step 1: Detect emotion
-        emotion_result = self._emotion_service.detect_emotion(query)
-        tone = self._emotion_service.get_tone_for_emotion(emotion_result.emotion)
-        logger.info(f"Detected emotion: {emotion_result.emotion} (tone: {tone})")
+        # Initialize state
+        initial_state: RAGState = {
+            "query": query,
+            "emotion": None,
+            "tone": "",
+            "query_embedding": [],
+            "retrieved_docs": [],
+            "filtered_docs": [],
+            "context": [],
+            "answer": "",
+            "confidence": 0.0,
+            "sources_used": 0,
+            "error": None
+        }
         
-        # Step 2: Generate query embedding
-        query_embedding = self._embedding_service.generate_embedding(query)
+        try:
+            # Execute the graph
+            final_state = await self._graph.ainvoke(initial_state)
+            
+            logger.info("Query processed successfully through LangGraph")
+            
+            # Build and return response
+            return QueryResponse(
+                answer=final_state["answer"],
+                emotion=final_state["emotion"],
+                sources_used=final_state["sources_used"],
+                confidence=final_state["confidence"]
+            )
         
-        # Step 3: Retrieve relevant context
-        similar_docs = self._vector_service.query_similar(
-            query_vector=query_embedding,
-            top_k=self._settings.top_k_results
-        )
-        
-        # Filter by similarity threshold
-        filtered_docs = [
-            doc for doc in similar_docs
-            if doc["score"] >= self._settings.similarity_threshold
-        ]
-        
-        logger.info(f"Retrieved {len(filtered_docs)} relevant documents")
-        
-        # Step 4: Prepare context
-        context = [
-            {"content": doc["metadata"].get("content", "")}
-            for doc in filtered_docs
-        ]
-        
-        # Step 5: Generate response with emotion-adapted tone
-        answer = await self._llm_service.generate_response(
-            query=query,
-            context=context,
-            tone=tone
-        )
-        
-        # Calculate confidence based on retrieval scores
-        confidence = self._calculate_confidence(filtered_docs)
-        
-        logger.info("Query processed successfully")
-        
-        return QueryResponse(
-            answer=answer,
-            emotion=emotion_result,
-            sources_used=len(filtered_docs),
-            confidence=confidence
-        )
+        except Exception as e:
+            logger.error(f"Error in LangGraph pipeline: {e}", exc_info=True)
+            
+            # Return error response
+            return QueryResponse(
+                answer=f"I apologize, but I encountered an error processing your request: {str(e)}",
+                emotion=EmotionResult(emotion="neutral", confidence=1.0),
+                sources_used=0,
+                confidence=0.0
+            )
     
     def _calculate_confidence(self, docs: list) -> float:
         """Calculate confidence score based on retrieved documents.
@@ -114,3 +319,50 @@ class RAGService:
         # Average similarity score of top results
         avg_score = sum(doc["score"] for doc in docs) / len(docs)
         return round(avg_score, 2)
+    
+    def visualize_graph(self) -> str:
+        """Get a visual representation of the LangGraph workflow.
+        
+        Returns:
+            String representation of the graph structure
+        """
+        return """
+LangGraph RAG Pipeline:
+
+┌─────────────────┐
+│  detect_emotion │ (Detect user emotion and determine tone)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────┐
+│ generate_embedding  │ (Generate query embedding vector)
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  retrieve_context   │ (Search vector DB for similar docs)
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│   filter_results    │ (Filter by similarity threshold)
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  prepare_context    │ (Format context for LLM)
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ generate_response   │ (LLM generates answer with tone)
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│calculate_confidence │ (Calculate final confidence score)
+└─────────┬───────────┘
+          │
+          ▼
+        [END]
+"""
