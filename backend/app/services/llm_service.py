@@ -1,7 +1,7 @@
 """LLM service using LangChain for response generation."""
 import logging
 from typing import List, Dict
-from langchain_community.llms import HuggingFaceHub
+from langchain_huggingface import HuggingFaceEndpoint
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
@@ -22,15 +22,13 @@ class LLMService:
         self._settings = get_settings()
         logger.info(f"Initializing LLM service via LangChain: {self._settings.llm_model}")
         
-        # Initialize LangChain HuggingFace LLM
-        self._llm = HuggingFaceHub(
+        # Initialize LangChain HuggingFace LLM using HuggingFaceEndpoint
+        self._llm = HuggingFaceEndpoint(
             repo_id=self._settings.llm_model,
             huggingfacehub_api_token=self._settings.huggingface_api_key,
-            model_kwargs={
-                "temperature": 0.7,
-                "max_new_tokens": 300,
-                "top_p": 0.9
-            }
+            temperature=0.7,
+            max_new_tokens=300,
+            top_p=0.9
         )
         
         # Create prompt template
@@ -93,13 +91,14 @@ ANSWER:"""
         
         # Generate response using LangChain
         try:
-            # Use the chain with await for async support
-            response = await self._chain.arun(
-                context=context_str,
-                tone=tone,
-                query=query
-            )
-            return response.strip()
+            # Use ainvoke instead of deprecated arun
+            response = await self._chain.ainvoke({
+                "context": context_str,
+                "tone": tone,
+                "query": query
+            })
+            # ainvoke returns a dict with 'text' key
+            return response.get("text", "").strip()
         except Exception as e:
             logger.error(f"Error generating response via LangChain: {e}")
             return "I apologize, but I'm having trouble generating a response right now. Please try again."
