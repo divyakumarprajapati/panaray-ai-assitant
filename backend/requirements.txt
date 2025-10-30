@@ -12,4 +12,5 @@ langchain-community==0.0.38
 langchain-core==0.1.52
 langchain-huggingface==0.0.3
 langgraph==0.0.20
+huggingface-hub==0.20.3
 pinecone-client==3.0.2
