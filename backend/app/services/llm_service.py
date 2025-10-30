@@ -2,8 +2,8 @@
 import logging
 from typing import List, Dict
 from langchain_huggingface import HuggingFaceEndpoint
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 from ..config import get_settings
 
@@ -34,12 +34,8 @@ class LLMService:
         # Create prompt template
         self._prompt_template = self._create_prompt_template()
         
-        # Create LLM chain
-        self._chain = LLMChain(
-            llm=self._llm,
-            prompt=self._prompt_template,
-            verbose=False
-        )
+        # Create LLM chain using LCEL (LangChain Expression Language)
+        self._chain = self._prompt_template | self._llm | StrOutputParser()
         
         logger.info("LLM service initialized successfully with LangChain")
     
@@ -89,16 +85,16 @@ ANSWER:"""
         # Build context string from retrieved documents
         context_str = self._build_context(context)
         
-        # Generate response using LangChain
+        # Generate response using LangChain LCEL
         try:
-            # Use ainvoke instead of deprecated arun
+            # Use ainvoke with LCEL chain (returns string directly)
             response = await self._chain.ainvoke({
                 "context": context_str,
                 "tone": tone,
                 "query": query
             })
-            # ainvoke returns a dict with 'text' key
-            return response.get("text", "").strip()
+            # LCEL with StrOutputParser returns a string directly
+            return response.strip() if isinstance(response, str) else str(response).strip()
         except Exception as e:
             logger.error(f"Error generating response via LangChain: {e}")
             return "I apologize, but I'm having trouble generating a response right now. Please try again."
