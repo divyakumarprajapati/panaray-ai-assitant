@@ -22,6 +22,16 @@ class LLMService:
         self._settings = get_settings()
         logger.info(f"Initializing LLM service via LangChain: {self._settings.llm_model}")
         
+        # Validate API key
+        if not self._settings.huggingface_api_key:
+            error_msg = (
+                "HuggingFace API key is not configured. "
+                "Please set HUGGINGFACE_API_KEY in your .env file or environment variables. "
+                "Get your API key from https://huggingface.co/settings/tokens"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         # Initialize LangChain HuggingFace LLM
         self._llm = HuggingFaceHub(
             repo_id=self._settings.llm_model,

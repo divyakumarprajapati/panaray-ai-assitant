@@ -31,6 +31,17 @@ class EmotionService:
     def __init__(self):
         """Initialize the emotion classification service."""
         self._settings = get_settings()
+        
+        # Validate API key
+        if not self._settings.huggingface_api_key:
+            error_msg = (
+                "HuggingFace API key is not configured. "
+                "Please set HUGGINGFACE_API_KEY in your .env file or environment variables. "
+                "Get your API key from https://huggingface.co/settings/tokens"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         self._api_url = f"https://api-inference.huggingface.co/models/{self._settings.emotion_model}"
         self._headers = {"Authorization": f"Bearer {self._settings.huggingface_api_key}"}
         logger.info(f"Emotion service initialized with model: {self._settings.emotion_model}")
