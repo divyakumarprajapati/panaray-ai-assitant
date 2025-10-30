@@ -20,17 +20,16 @@ class LLMService:
         self._settings = get_settings()
         logger.info(f"Initializing LLM service with direct API: {self._settings.llm_model}")
         
-        # Hugging Face API endpoint
-        self._api_url = f"https://api-inference.huggingface.co/models/{self._settings.llm_model}"
+        # Hugging Face Router API endpoint (OpenAI-compatible)
+        self._api_url = "https://router.huggingface.co/novita/v3/openai/chat/completions"
         self._headers = {
             "Authorization": f"Bearer {self._settings.huggingface_api_key}",
             "Content-Type": "application/json"
         }
         
         # LLM parameters
-        self._temperature = 0.7
-        self._max_new_tokens = 300
-        self._top_p = 0.9
+        self._temperature = 0.4
+        self._max_tokens = 512
         
         logger.info("LLM service initialized successfully with direct API")
     
@@ -84,17 +83,17 @@ ANSWER:"""
         # Create prompt
         prompt = self._create_prompt(context_str, tone, query)
         
-        # Call Hugging Face API directly
+        # Call Hugging Face API directly using OpenAI-compatible chat completions API
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 payload = {
-                    "inputs": prompt,
-                    "parameters": {
-                        "temperature": self._temperature,
-                        "max_new_tokens": self._max_new_tokens,
-                        "top_p": self._top_p,
-                        "return_full_text": False
-                    }
+                    "model": self._settings.llm_model,
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant specialized in William O'Neil + Co. PANARAY Datagraph™."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": self._temperature,
+                    "max_tokens": self._max_tokens,
                 }
                 
                 response = await client.post(
@@ -106,13 +105,8 @@ ANSWER:"""
                 
                 result = response.json()
                 
-                # Extract generated text from response
-                if isinstance(result, list) and len(result) > 0:
-                    generated_text = result[0].get("generated_text", "")
-                elif isinstance(result, dict):
-                    generated_text = result.get("generated_text", "")
-                else:
-                    generated_text = str(result)
+                # Extract generated text from OpenAI-compatible response
+                generated_text = result["choices"][0]["message"]["content"]
                 
                 return generated_text.strip()
                 
