@@ -1,7 +1,6 @@
 """FastAPI application entry point."""
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -63,10 +62,8 @@ async def lifespan(app: FastAPI):
                 
                 # Load data from file
                 settings = get_settings()
-                # Use absolute path relative to this file's location
-                current_file = Path(__file__).resolve()
-                data_file = current_file.parent.parent / "data" / "features.jsonl"
-                raw_data = DataLoader.load_jsonl(str(data_file))
+                data_file = "data/features.jsonl"
+                raw_data = DataLoader.load_jsonl(data_file)
                 documents = DataLoader.prepare_documents(raw_data)
                 
                 if documents:
