@@ -56,46 +56,8 @@ async def lifespan(app: FastAPI):
         # Load data into Pinecone if not already loaded
         logger.info("Checking if data needs to be loaded...")
         try:
-            stats = vector_service.get_stats()
-            if stats["total_vectors"] == 0:
-                logger.info("Index is empty, loading initial data...")
-                
-                # Load data from file
-                settings = get_settings()
-                data_file = "backend/data/features.jsonl"
-                raw_data = DataLoader.load_jsonl(data_file)
-                documents = DataLoader.prepare_documents(raw_data)
-                
-                if documents:
-                    # Generate embeddings
-                    logger.info(f"Generating embeddings for {len(documents)} documents...")
-                    contents = [doc["content"] for doc in documents]
-                    embeddings = embedding_service.generate_embeddings_batch(contents)
-                    
-                    # Prepare metadata
-                    metadatas = [
-                        {
-                            "content": doc["content"],
-                            "question": doc["question"],
-                            "answer": doc["answer"]
-                        }
-                        for doc in documents
-                    ]
-                    
-                    # Index vectors
-                    logger.info("Indexing vectors in Pinecone...")
-                    ids = [doc["id"] for doc in documents]
-                    indexed_count = vector_service.upsert_vectors(
-                        vectors=embeddings,
-                        metadatas=metadatas,
-                        ids=ids
-                    )
-                    
-                    logger.info(f"Successfully indexed {indexed_count} documents")
-                else:
-                    logger.warning("No valid documents found in data file")
-            else:
-                logger.info(f"Index already contains {stats['total_vectors']} vectors, skipping data load")
+            result = DataLoader.load_and_index_data(vector_service, embedding_service, force_reindex=False)
+            logger.info(f"Data loading complete: {result['status']} ({result['indexed_count']} documents)")
         except FileNotFoundError as e:
             logger.warning(f"Data file not found during startup: {e}")
         except Exception as e:

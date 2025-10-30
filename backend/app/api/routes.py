@@ -11,7 +11,6 @@ from ..models.schemas import (
     IndexDataResponse
 )
 from ..utils import DataLoader
-from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -93,69 +92,33 @@ async def index_data(
     index_request: IndexDataRequest,
     request: Request
 ) -> IndexDataResponse:
-    """Index data from JSONL file into vector store.
+    """Manually trigger data indexing (mainly for reindexing).
+    
+    Data is automatically loaded on application startup. This endpoint is provided
+    for manual reindexing operations (e.g., after data file updates).
     
     Args:
-        index_request: Index request with options
+        index_request: Index request with force_reindex option
         request: FastAPI request object
         
     Returns:
         IndexDataResponse with indexing results
     """
     services = request.app.state.services
+    
     try:
-        settings = get_settings()
-        data_file = "backend/data/features.jsonl"
+        logger.info(f"Manual index triggered (force_reindex={index_request.force_reindex})")
         
-        # Load data
-        logger.info("Loading data from file")
-        raw_data = DataLoader.load_jsonl(data_file)
-        documents = DataLoader.prepare_documents(raw_data)
-        
-        if not documents:
-            raise HTTPException(status_code=400, detail="No valid documents found in data file")
-        
-        # Check if already indexed
-        stats = services["vector"].get_stats()
-        if stats["total_vectors"] > 0 and not index_request.force_reindex:
-            logger.info("Data already indexed, skipping")
-            return IndexDataResponse(
-                indexed_count=stats["total_vectors"],
-                status="already_indexed"
-            )
-        
-        # Clear existing data if force reindex
-        if index_request.force_reindex and stats["total_vectors"] > 0:
-            logger.info("Force reindex requested, clearing existing data")
-            services["vector"].delete_all()
-        
-        # Generate embeddings
-        logger.info("Generating embeddings for documents")
-        contents = [doc["content"] for doc in documents]
-        embeddings = services["embedding"].generate_embeddings_batch(contents)
-        
-        # Prepare metadata
-        metadatas = [
-            {
-                "content": doc["content"],
-                "question": doc["question"],
-                "answer": doc["answer"]
-            }
-            for doc in documents
-        ]
-        
-        # Index vectors
-        logger.info("Indexing vectors in Pinecone")
-        ids = [doc["id"] for doc in documents]
-        indexed_count = services["vector"].upsert_vectors(
-            vectors=embeddings,
-            metadatas=metadatas,
-            ids=ids
+        # Use the shared data loading function
+        result = DataLoader.load_and_index_data(
+            vector_service=services["vector"],
+            embedding_service=services["embedding"],
+            force_reindex=index_request.force_reindex
         )
         
         return IndexDataResponse(
-            indexed_count=indexed_count,
-            status="success"
+            indexed_count=result["indexed_count"],
+            status=result["status"]
         )
         
     except FileNotFoundError as e:
