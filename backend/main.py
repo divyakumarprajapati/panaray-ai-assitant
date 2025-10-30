@@ -17,11 +17,7 @@ def serve(host='0.0.0.0', port=8000):
 
 if __name__ == "__main__":
     try:
-        print("=" * 50)
         print("Feature Assistant Backend - Starting")
-        print("=" * 50)
         serve()
     except KeyboardInterrupt:
-        print("\n" + "=" * 50)
-        print("Server has stopped")
-        print("=" * 50)
+        print("\nServer has stopped")
