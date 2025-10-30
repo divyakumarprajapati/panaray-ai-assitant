@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
     
-    # API Keys
+    # API Keys (required - must be set in .env file or environment variables)
     huggingface_api_key: str
     pinecone_api_key: str
     
