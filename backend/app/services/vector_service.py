@@ -3,6 +3,7 @@ import logging
 from typing import List, Dict, Optional
 from langchain_community.vectorstores import Pinecone as LangChainPinecone
 from pinecone import Pinecone, ServerlessSpec
+from pinecone.core.client.exceptions import ServiceException, PineconeException
 import time
 
 from ..config import get_settings
@@ -39,26 +40,87 @@ class VectorService:
         logger.info(f"Vector service initialized with index: {self._index_name}")
     
     def _ensure_index_exists(self):
-        """Ensure the Pinecone index exists, create if not."""
-        existing_indexes = [index.name for index in self._pc.list_indexes()]
+        """Ensure the Pinecone index exists, create if not.
         
-        if self._index_name not in existing_indexes:
-            logger.info(f"Creating new index: {self._index_name}")
-            self._pc.create_index(
-                name=self._index_name,
-                dimension=self._settings.pinecone_dimension,
-                metric="cosine",
-                spec=ServerlessSpec(
-                    cloud="aws",
-                    region=self._settings.pinecone_environment
-                )
-            )
-            
-            # Wait for index to be ready
-            while not self._pc.describe_index(self._index_name).status['ready']:
-                time.sleep(1)
-            
-            logger.info("Index created successfully")
+        Handles Pinecone API errors gracefully, including 500 Internal Server Errors
+        which can occur due to transient issues or race conditions.
+        """
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                existing_indexes = [index.name for index in self._pc.list_indexes()]
+                
+                if self._index_name not in existing_indexes:
+                    logger.info(f"Creating new index: {self._index_name} (attempt {attempt + 1}/{max_retries})")
+                    
+                    try:
+                        self._pc.create_index(
+                            name=self._index_name,
+                            dimension=self._settings.pinecone_dimension,
+                            metric="cosine",
+                            spec=ServerlessSpec(
+                                cloud="aws",
+                                region=self._settings.pinecone_environment
+                            )
+                        )
+                        
+                        # Wait for index to be ready
+                        logger.info("Waiting for index to be ready...")
+                        while not self._pc.describe_index(self._index_name).status['ready']:
+                            time.sleep(1)
+                        
+                        logger.info("Index created successfully")
+                        return
+                        
+                    except ServiceException as e:
+                        # Handle 500 Internal Server Error from Pinecone
+                        if e.status == 500:
+                            logger.warning(f"Pinecone returned 500 error: {e.reason}")
+                            
+                            # Check if index was actually created despite the error
+                            time.sleep(retry_delay)
+                            existing_indexes = [index.name for index in self._pc.list_indexes()]
+                            
+                            if self._index_name in existing_indexes:
+                                logger.info("Index exists despite 500 error - continuing")
+                                # Wait for index to be ready
+                                desc = self._pc.describe_index(self._index_name)
+                                while not desc.status['ready']:
+                                    time.sleep(1)
+                                    desc = self._pc.describe_index(self._index_name)
+                                return
+                            
+                            # If not the last attempt, retry
+                            if attempt < max_retries - 1:
+                                logger.info(f"Retrying index creation in {retry_delay} seconds...")
+                                time.sleep(retry_delay)
+                                continue
+                            else:
+                                # Last attempt failed
+                                raise RuntimeError(
+                                    f"Failed to create Pinecone index after {max_retries} attempts. "
+                                    f"Pinecone returned 500 Internal Server Error. "
+                                    f"This might be a temporary issue with Pinecone service. "
+                                    f"Please try again later or check your Pinecone dashboard."
+                                ) from e
+                        else:
+                            # Re-raise other ServiceException errors
+                            raise
+                            
+                else:
+                    logger.info(f"Index {self._index_name} already exists")
+                    return
+                    
+            except (ServiceException, PineconeException) as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Error checking/creating index (attempt {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"Failed to ensure index exists after {max_retries} attempts: {e}")
+                    raise
     
     def get_vectorstore(self, embeddings):
         """Get or create LangChain Pinecone vectorstore.
