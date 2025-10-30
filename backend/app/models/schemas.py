@@ -25,14 +25,3 @@ class HealthResponse(BaseModel):
     """Health check response."""
     status: str = Field(default="healthy")
     services: dict[str, str] = Field(default_factory=dict)
-
-
-class IndexDataRequest(BaseModel):
-    """Request to index data into vector store."""
-    force_reindex: bool = Field(default=False, description="Force reindexing of all data")
-
-
-class IndexDataResponse(BaseModel):
-    """Response after indexing data."""
-    indexed_count: int = Field(..., description="Number of documents indexed")
-    status: str = Field(..., description="Indexing status")
