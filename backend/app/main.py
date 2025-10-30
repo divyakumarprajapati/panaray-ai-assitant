@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
                 
                 # Load data from file
                 settings = get_settings()
-                data_file = "backend/data/features.jsonl"
+                data_file = "data/features.jsonl"
                 raw_data = DataLoader.load_jsonl(data_file)
                 documents = DataLoader.prepare_documents(raw_data)
                 
