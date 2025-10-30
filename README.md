@@ -22,8 +22,9 @@ A production-ready, full-stack Web App Feature Assistant powered by RAG (Retriev
 - **Vector DB**: Pinecone (serverless) via LangChain integration
 - **Embedding Model**: sentence-transformers/all-MiniLM-L6-v2 (384 dimensions) via LangChain
 - **LLM**: Llama 3 (meta-llama/Meta-Llama-3-8B-Instruct) via LangChain HuggingFaceHub
-- **Emotion Classifier**: distilbert-base-uncased-emotion (Hugging Face Transformers)
+- **Emotion Classifier**: distilbert-base-uncased-emotion via HuggingFace Inference API
 - **Design**: SOLID principles, LangGraph state graphs, service layer architecture, dependency injection
+- **No Heavy Dependencies**: Uses cloud APIs instead of local transformers/torch
 
 ### Frontend
 - **Framework**: React 18 + Vite
@@ -329,13 +330,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
   - langchain-community - Community integrations
   - langchain-huggingface - HuggingFace embeddings integration
   - langgraph - State graph workflow orchestration
-- **ML & AI**:
-  - transformers - Emotion detection (HuggingFace)
-  - torch - ML backend for transformers
 - **Vector Database**:
   - pinecone-client - Vector database client
 - **Utilities**:
-  - httpx - Async HTTP client
+  - httpx - Async HTTP client for API calls
+
+**Note**: This implementation uses HuggingFace Inference API for all models (embeddings, LLM, emotion detection), eliminating the need for heavy local dependencies like `transformers` and `torch`. This makes the deployment lighter and faster.
 
 ### Frontend (Node.js)
 - react - UI framework

@@ -34,8 +34,10 @@ The PANARAY Feature Assistant is a full-stack RAG (Retrieval-Augmented Generatio
   │        LangChain & External Services      │
   │  • LangChain (AI Framework)             │
   │  • LangGraph (Workflow Orchestration)   │
-  │  • Hugging Face API (LLM + Emotion)     │
-  │  • HuggingFace Embeddings               │
+  │  • HuggingFace Inference API            │
+  │    - LLM (Llama 3)                      │
+  │    - Embeddings (all-MiniLM-L6-v2)      │
+  │    - Emotion Detection (DistilBERT)     │
   │  • Pinecone (Vector Database)           │
   └────────────────────────────────────────────┘
 ```
@@ -60,11 +62,12 @@ Responsibility: Generate vector embeddings using LangChain
 
 **EmotionService** (`emotion_service.py`)
 ```
-Responsibility: Detect emotions from text
-- Uses: distilbert-base-uncased-emotion
-- Methods: detect_emotion(), get_tone_for_emotion()
+Responsibility: Detect emotions from text via HuggingFace Inference API
+- Uses: distilbert-base-uncased-emotion (via API, no local model)
+- Methods: detect_emotion(), detect_emotion_async(), get_tone_for_emotion()
 - Output: Emotion label + confidence score
 - Maps emotions to response tones
+- Benefits: No torch/transformers dependencies, lightweight deployment
 ```
 
 **LLMService** (`llm_service.py`)
@@ -380,11 +383,14 @@ Benefits:
 - ✅ Available via Hugging Face API
 - ✅ Reasonable latency
 
-### Why Sentence Transformers?
-- ✅ High-quality embeddings
-- ✅ Small model size (all-MiniLM-L6-v2)
-- ✅ Fast inference
-- ✅ Well-documented
+### Why HuggingFace Inference API (No Local Transformers/Torch)?
+- ✅ **Lightweight Deployment**: No need for 500MB+ torch and transformers packages
+- ✅ **Faster Startup**: No model loading time on application start
+- ✅ **Less Memory**: Models run on HuggingFace infrastructure, not local RAM
+- ✅ **Auto-scaling**: HuggingFace handles model scaling and availability
+- ✅ **Easy Updates**: Model updates happen on HuggingFace side without redeployment
+- ✅ **Cost Effective**: Free tier available, pay only for what you use
+- ✅ **Simpler Dependencies**: Fewer packages = fewer compatibility issues
 
 ### Why React + TypeScript?
 - ✅ Type safety
