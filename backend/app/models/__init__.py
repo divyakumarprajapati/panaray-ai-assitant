@@ -3,16 +3,12 @@ from .schemas import (
     QueryRequest,
     QueryResponse,
     EmotionResult,
-    HealthResponse,
-    IndexDataRequest,
-    IndexDataResponse
+    HealthResponse
 )
 
 __all__ = [
     "QueryRequest",
     "QueryResponse",
     "EmotionResult",
-    "HealthResponse",
-    "IndexDataRequest",
-    "IndexDataResponse"
+    "HealthResponse"
 ]
