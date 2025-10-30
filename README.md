@@ -333,7 +333,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 - **Vector Database**:
   - pinecone-client - Vector database client
 - **Utilities**:
-  - httpx - Async HTTP client for API calls
+  - requests - HTTP client for API calls
 
 **Note**: This implementation uses HuggingFace Inference API for all models (embeddings, LLM, emotion detection), eliminating the need for heavy local dependencies like `transformers` and `torch`. This makes the deployment lighter and faster.
 

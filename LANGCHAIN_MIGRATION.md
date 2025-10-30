@@ -90,9 +90,15 @@ def similarity_search_with_langchain(self, query, embeddings, k=3):
 
 **Before:**
 ```python
-# Direct API calls with httpx
-async with httpx.AsyncClient() as client:
-    response = await client.post(api_url, json=payload)
+# Direct API calls with requests
+import asyncio
+import requests
+
+def _make_request():
+    response = requests.post(api_url, json=payload, timeout=60.0)
+    return response
+
+response = await asyncio.to_thread(_make_request)
 ```
 
 **After:**
@@ -126,11 +132,14 @@ results = self._classifier(text)
 
 **After:**
 ```python
-import httpx
+import asyncio
+import requests
 # Direct HuggingFace Inference API calls
-async with httpx.AsyncClient() as client:
-    response = await client.post(api_url, json={"inputs": text})
-    results = response.json()
+def _make_request():
+    response = requests.post(api_url, json={"inputs": text}, timeout=10.0)
+    return response.json()
+
+results = await asyncio.to_thread(_make_request)
 ```
 
 **Benefits:**
