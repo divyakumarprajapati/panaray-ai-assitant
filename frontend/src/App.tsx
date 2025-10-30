@@ -6,7 +6,8 @@ import { useChat } from '@/hooks/useChat';
 import { ChatContainer } from '@/components/Chat/ChatContainer';
 import { AlertCircle, Database, Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { checkHealth, HealthStatus } from '@/services/api';
+import { checkHealth } from '@/services/api';
+import { HealthStatus } from '@/types';
 
 function App() {
   const { messages, isLoading, error, sendMessage, clearMessages } = useChat();
