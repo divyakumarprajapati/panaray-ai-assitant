@@ -1,9 +1,7 @@
-"""LLM service using LangChain for response generation."""
+"""LLM service using direct Hugging Face API calls for response generation."""
 import logging
 from typing import List, Dict
-from langchain_huggingface import HuggingFaceEndpoint
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+import httpx
 
 from ..config import get_settings
 
@@ -11,41 +9,43 @@ logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    """Service for generating responses using LangChain LLM wrappers.
+    """Service for generating responses using direct Hugging Face API calls.
     
     Follows Single Responsibility Principle - only handles LLM inference.
-    Now using LangChain's HuggingFaceHub integration for better composability.
+    Uses httpx for async HTTP calls to Hugging Face Inference API.
     """
     
     def __init__(self):
-        """Initialize the LLM service with LangChain."""
+        """Initialize the LLM service with direct API access."""
         self._settings = get_settings()
-        logger.info(f"Initializing LLM service via LangChain: {self._settings.llm_model}")
+        logger.info(f"Initializing LLM service with direct API: {self._settings.llm_model}")
         
-        # Initialize LangChain HuggingFace LLM using HuggingFaceEndpoint
-        self._llm = HuggingFaceEndpoint(
-            repo_id=self._settings.llm_model,
-            huggingfacehub_api_token=self._settings.huggingface_api_key,
-            temperature=0.7,
-            max_new_tokens=300,
-            top_p=0.9
-        )
+        # Hugging Face API endpoint
+        self._api_url = f"https://api-inference.huggingface.co/models/{self._settings.llm_model}"
+        self._headers = {
+            "Authorization": f"Bearer {self._settings.huggingface_api_key}",
+            "Content-Type": "application/json"
+        }
         
-        # Create prompt template
-        self._prompt_template = self._create_prompt_template()
+        # LLM parameters
+        self._temperature = 0.7
+        self._max_new_tokens = 300
+        self._top_p = 0.9
         
-        # Create LLM chain using LCEL (LangChain Expression Language)
-        self._chain = self._prompt_template | self._llm | StrOutputParser()
-        
-        logger.info("LLM service initialized successfully with LangChain")
+        logger.info("LLM service initialized successfully with direct API")
     
-    def _create_prompt_template(self) -> PromptTemplate:
-        """Create the prompt template for RAG.
+    def _create_prompt(self, context: str, tone: str, query: str) -> str:
+        """Create the prompt for RAG.
         
+        Args:
+            context: Formatted context string
+            tone: Tone description based on detected emotion
+            query: User's question
+            
         Returns:
-            LangChain PromptTemplate instance
+            Formatted prompt string
         """
-        template = """You are a helpful assistant specialized in William O'Neil + Co. PANARAY Datagraph™.
+        template = f"""You are a helpful assistant specialized in William O'Neil + Co. PANARAY Datagraph™.
 
 CONTEXT:
 {context}
@@ -60,11 +60,7 @@ INSTRUCTIONS:
 QUESTION: {query}
 
 ANSWER:"""
-        
-        return PromptTemplate(
-            input_variables=["context", "tone", "query"],
-            template=template
-        )
+        return template
     
     async def generate_response(
         self,
@@ -85,18 +81,49 @@ ANSWER:"""
         # Build context string from retrieved documents
         context_str = self._build_context(context)
         
-        # Generate response using LangChain LCEL
+        # Create prompt
+        prompt = self._create_prompt(context_str, tone, query)
+        
+        # Call Hugging Face API directly
         try:
-            # Use ainvoke with LCEL chain (returns string directly)
-            response = await self._chain.ainvoke({
-                "context": context_str,
-                "tone": tone,
-                "query": query
-            })
-            # LCEL with StrOutputParser returns a string directly
-            return response.strip() if isinstance(response, str) else str(response).strip()
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "inputs": prompt,
+                    "parameters": {
+                        "temperature": self._temperature,
+                        "max_new_tokens": self._max_new_tokens,
+                        "top_p": self._top_p,
+                        "return_full_text": False
+                    }
+                }
+                
+                response = await client.post(
+                    self._api_url,
+                    headers=self._headers,
+                    json=payload
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                
+                # Extract generated text from response
+                if isinstance(result, list) and len(result) > 0:
+                    generated_text = result[0].get("generated_text", "")
+                elif isinstance(result, dict):
+                    generated_text = result.get("generated_text", "")
+                else:
+                    generated_text = str(result)
+                
+                return generated_text.strip()
+                
+        except httpx.TimeoutException:
+            logger.error("Timeout calling Hugging Face API")
+            return "I apologize, but the request timed out. Please try again."
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error calling Hugging Face API: {e}")
+            return "I apologize, but I'm having trouble generating a response right now. Please try again."
         except Exception as e:
-            logger.error(f"Error generating response via LangChain: {e}")
+            logger.error(f"Error generating response via direct API: {e}")
             return "I apologize, but I'm having trouble generating a response right now. Please try again."
     
     def _build_context(self, context: List[Dict[str, str]]) -> str:
@@ -117,21 +144,3 @@ ANSWER:"""
             context_parts.append(f"[{i}] {content}")
         
         return "\n\n".join(context_parts)
-    
-    @property
-    def llm(self):
-        """Get the underlying LangChain LLM object.
-        
-        Returns:
-            LangChain LLM instance
-        """
-        return self._llm
-    
-    @property
-    def chain(self):
-        """Get the LangChain chain object.
-        
-        Returns:
-            LangChain LLMChain instance
-        """
-        return self._chain
