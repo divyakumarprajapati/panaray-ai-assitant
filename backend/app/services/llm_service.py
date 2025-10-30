@@ -1,7 +1,8 @@
 """LLM service using direct Hugging Face API calls for response generation."""
 import logging
 from typing import List, Dict
-import httpx
+import asyncio
+import requests
 
 from ..config import get_settings
 
@@ -12,7 +13,7 @@ class LLMService:
     """Service for generating responses using direct Hugging Face API calls.
     
     Follows Single Responsibility Principle - only handles LLM inference.
-    Uses httpx for async HTTP calls to Hugging Face Inference API.
+    Uses requests for HTTP calls to Hugging Face Inference API.
     """
     
     def __init__(self):
@@ -84,36 +85,40 @@ ANSWER:"""
         prompt = self._create_prompt(context_str, tone, query)
         
         # Call Hugging Face API directly using OpenAI-compatible chat completions API
+        def _make_request():
+            payload = {
+                "model": self._settings.llm_model,
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant specialized in William O'Neil + Co. PANARAY Datagraph™."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": self._temperature,
+                "max_tokens": self._max_tokens,
+            }
+            
+            response = requests.post(
+                self._api_url,
+                headers=self._headers,
+                json=payload,
+                timeout=60.0
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            # Extract generated text from OpenAI-compatible response
+            generated_text = result["choices"][0]["message"]["content"]
+            
+            return generated_text.strip()
+        
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                payload = {
-                    "model": self._settings.llm_model,
-                    "messages": [
-                        {"role": "system", "content": "You are a helpful assistant specialized in William O'Neil + Co. PANARAY Datagraph™."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": self._temperature,
-                    "max_tokens": self._max_tokens,
-                }
+            # Run the synchronous request in a thread pool
+            return await asyncio.to_thread(_make_request)
                 
-                response = await client.post(
-                    self._api_url,
-                    headers=self._headers,
-                    json=payload
-                )
-                response.raise_for_status()
-                
-                result = response.json()
-                
-                # Extract generated text from OpenAI-compatible response
-                generated_text = result["choices"][0]["message"]["content"]
-                
-                return generated_text.strip()
-                
-        except httpx.TimeoutException:
+        except requests.exceptions.Timeout:
             logger.error("Timeout calling Hugging Face API")
             return "I apologize, but the request timed out. Please try again."
-        except httpx.HTTPStatusError as e:
+        except requests.exceptions.HTTPError as e:
             logger.error(f"HTTP error calling Hugging Face API: {e}")
             return "I apologize, but I'm having trouble generating a response right now. Please try again."
         except Exception as e:

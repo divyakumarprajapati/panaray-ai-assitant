@@ -1,7 +1,8 @@
 """Emotion detection service using HuggingFace Inference API."""
 import logging
 from typing import Dict
-import httpx
+import asyncio
+import requests
 
 from ..config import get_settings
 from ..models.schemas import EmotionResult
@@ -15,6 +16,7 @@ class EmotionService:
     Follows Single Responsibility Principle - only handles emotion detection.
     Now uses HuggingFace Inference API instead of local transformers/torch.
     This eliminates the need for heavy ML dependencies.
+    Uses requests for HTTP calls to the API.
     """
     
     # Emotion to tone mapping for response adaptation
@@ -49,29 +51,29 @@ class EmotionService:
             text_to_analyze = text[:512]
             
             # Call HuggingFace Inference API synchronously
-            with httpx.Client(timeout=10.0) as client:
-                response = client.post(
-                    self._api_url,
-                    headers=self._headers,
-                    json={"inputs": text_to_analyze}
-                )
-                response.raise_for_status()
+            response = requests.post(
+                self._api_url,
+                headers=self._headers,
+                json={"inputs": text_to_analyze},
+                timeout=10.0
+            )
+            response.raise_for_status()
+            
+            results = response.json()
+            
+            # Parse response
+            if results and isinstance(results, list) and len(results) > 0:
+                # Get top result (highest score)
+                top_result = results[0][0] if isinstance(results[0], list) else results[0]
+                emotion = top_result.get("label", "neutral").lower()
+                confidence = top_result.get("score", 1.0)
                 
-                results = response.json()
-                
-                # Parse response
-                if results and isinstance(results, list) and len(results) > 0:
-                    # Get top result (highest score)
-                    top_result = results[0][0] if isinstance(results[0], list) else results[0]
-                    emotion = top_result.get("label", "neutral").lower()
-                    confidence = top_result.get("score", 1.0)
-                    
-                    logger.debug(f"Detected emotion: {emotion} (confidence: {confidence:.2f})")
-                    return EmotionResult(emotion=emotion, confidence=confidence)
+                logger.debug(f"Detected emotion: {emotion} (confidence: {confidence:.2f})")
+                return EmotionResult(emotion=emotion, confidence=confidence)
         
-        except httpx.HTTPStatusError as e:
+        except requests.exceptions.HTTPError as e:
             logger.warning(f"HTTP error calling emotion API: {e}. Falling back to neutral.")
-        except httpx.TimeoutException:
+        except requests.exceptions.Timeout:
             logger.warning("Timeout calling emotion API. Falling back to neutral.")
         except Exception as e:
             logger.error(f"Error detecting emotion: {e}. Falling back to neutral.")
@@ -88,34 +90,40 @@ class EmotionService:
         Returns:
             EmotionResult with detected emotion and confidence
         """
-        try:
+        def _make_request():
             # Limit text length to avoid API issues
             text_to_analyze = text[:512]
             
-            # Call HuggingFace Inference API asynchronously
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    self._api_url,
-                    headers=self._headers,
-                    json={"inputs": text_to_analyze}
-                )
-                response.raise_for_status()
+            # Call HuggingFace Inference API synchronously
+            response = requests.post(
+                self._api_url,
+                headers=self._headers,
+                json={"inputs": text_to_analyze},
+                timeout=10.0
+            )
+            response.raise_for_status()
+            
+            results = response.json()
+            
+            # Parse response
+            if results and isinstance(results, list) and len(results) > 0:
+                # Get top result (highest score)
+                top_result = results[0][0] if isinstance(results[0], list) else results[0]
+                emotion = top_result.get("label", "neutral").lower()
+                confidence = top_result.get("score", 1.0)
                 
-                results = response.json()
-                
-                # Parse response
-                if results and isinstance(results, list) and len(results) > 0:
-                    # Get top result (highest score)
-                    top_result = results[0][0] if isinstance(results[0], list) else results[0]
-                    emotion = top_result.get("label", "neutral").lower()
-                    confidence = top_result.get("score", 1.0)
-                    
-                    logger.debug(f"Detected emotion: {emotion} (confidence: {confidence:.2f})")
-                    return EmotionResult(emotion=emotion, confidence=confidence)
+                logger.debug(f"Detected emotion: {emotion} (confidence: {confidence:.2f})")
+                return EmotionResult(emotion=emotion, confidence=confidence)
+            
+            return EmotionResult(emotion="neutral", confidence=1.0)
         
-        except httpx.HTTPStatusError as e:
+        try:
+            # Run the synchronous request in a thread pool
+            return await asyncio.to_thread(_make_request)
+        
+        except requests.exceptions.HTTPError as e:
             logger.warning(f"HTTP error calling emotion API: {e}. Falling back to neutral.")
-        except httpx.TimeoutException:
+        except requests.exceptions.Timeout:
             logger.warning("Timeout calling emotion API. Falling back to neutral.")
         except Exception as e:
             logger.error(f"Error detecting emotion: {e}. Falling back to neutral.")
