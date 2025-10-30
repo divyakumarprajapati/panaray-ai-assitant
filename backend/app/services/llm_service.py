@@ -1,7 +1,7 @@
 """LLM service using LangChain for response generation."""
 import logging
 from typing import List, Dict
-from langchain_community.llms import HuggingFaceHub
+from langchain_huggingface import HuggingFaceEndpoint
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
@@ -14,7 +14,7 @@ class LLMService:
     """Service for generating responses using LangChain LLM wrappers.
     
     Follows Single Responsibility Principle - only handles LLM inference.
-    Now using LangChain's HuggingFaceHub integration for better composability.
+    Now using LangChain's HuggingFaceEndpoint integration for better composability.
     """
     
     def __init__(self):
@@ -23,15 +23,12 @@ class LLMService:
         logger.info(f"Initializing LLM service via LangChain: {self._settings.llm_model}")
         
         # Initialize LangChain HuggingFace LLM
-        self._llm = HuggingFaceHub(
+        self._llm = HuggingFaceEndpoint(
             repo_id=self._settings.llm_model,
             huggingfacehub_api_token=self._settings.huggingface_api_key,
-            model_kwargs={
-                "temperature": 0.7,
-                "max_new_tokens": 300,
-                "top_p": 0.9,
-                "return_full_text": False
-            }
+            temperature=0.7,
+            max_new_tokens=300,
+            top_p=0.9
         )
         
         # Create prompt template
