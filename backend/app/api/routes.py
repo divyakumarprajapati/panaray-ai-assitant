@@ -1,6 +1,6 @@
 """API route definitions."""
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Annotated
 
 from ..models.schemas import (
@@ -10,51 +10,38 @@ from ..models.schemas import (
     IndexDataRequest,
     IndexDataResponse
 )
-from ..services import (
-    EmbeddingService,
-    EmotionService,
-    LLMService,
-    VectorService,
-    RAGService
-)
 from ..utils import DataLoader
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Service instances (singleton pattern)
-_services = {}
 
-
-def get_services() -> dict:
-    """Get or create service instances.
+def get_services(request: Request) -> dict:
+    """Get service instances from app state.
     
+    Services are initialized during application startup and stored in app.state.
+    
+    Args:
+        request: FastAPI request object
+        
     Returns:
         Dictionary of service instances
     """
-    if not _services:
-        logger.info("Initializing services")
-        _services["embedding"] = EmbeddingService()
-        _services["emotion"] = EmotionService()
-        _services["llm"] = LLMService()
-        _services["vector"] = VectorService()
-        _services["rag"] = RAGService(
-            embedding_service=_services["embedding"],
-            emotion_service=_services["emotion"],
-            llm_service=_services["llm"],
-            vector_service=_services["vector"]
-        )
-    return _services
+    return request.app.state.services
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health_check(services: Annotated[dict, Depends(get_services)]) -> HealthResponse:
+async def health_check(request: Request) -> HealthResponse:
     """Health check endpoint.
     
+    Args:
+        request: FastAPI request object
+        
     Returns:
         Health status of all services
     """
+    services = request.app.state.services
     try:
         # Check vector store
         stats = services["vector"].get_stats()
@@ -76,21 +63,22 @@ async def health_check(services: Annotated[dict, Depends(get_services)]) -> Heal
 
 @router.post("/query", response_model=QueryResponse)
 async def query_assistant(
-    request: QueryRequest,
-    services: Annotated[dict, Depends(get_services)]
+    query_request: QueryRequest,
+    request: Request
 ) -> QueryResponse:
     """Query the feature assistant.
     
     Args:
-        request: Query request with user question
-        services: Injected services
+        query_request: Query request with user question
+        request: FastAPI request object
         
     Returns:
         QueryResponse with answer and metadata
     """
+    services = request.app.state.services
     try:
-        rag_service: RAGService = services["rag"]
-        response = await rag_service.process_query(request.query)
+        rag_service = services["rag"]
+        response = await rag_service.process_query(query_request.query)
         return response
     except Exception as e:
         logger.error(f"Error processing query: {e}", exc_info=True)
@@ -102,18 +90,19 @@ async def query_assistant(
 
 @router.post("/index", response_model=IndexDataResponse)
 async def index_data(
-    request: IndexDataRequest,
-    services: Annotated[dict, Depends(get_services)]
+    index_request: IndexDataRequest,
+    request: Request
 ) -> IndexDataResponse:
     """Index data from JSONL file into vector store.
     
     Args:
-        request: Index request with options
-        services: Injected services
+        index_request: Index request with options
+        request: FastAPI request object
         
     Returns:
         IndexDataResponse with indexing results
     """
+    services = request.app.state.services
     try:
         settings = get_settings()
         data_file = "backend/data/features.jsonl"
@@ -128,7 +117,7 @@ async def index_data(
         
         # Check if already indexed
         stats = services["vector"].get_stats()
-        if stats["total_vectors"] > 0 and not request.force_reindex:
+        if stats["total_vectors"] > 0 and not index_request.force_reindex:
             logger.info("Data already indexed, skipping")
             return IndexDataResponse(
                 indexed_count=stats["total_vectors"],
@@ -136,7 +125,7 @@ async def index_data(
             )
         
         # Clear existing data if force reindex
-        if request.force_reindex and stats["total_vectors"] > 0:
+        if index_request.force_reindex and stats["total_vectors"] > 0:
             logger.info("Force reindex requested, clearing existing data")
             services["vector"].delete_all()
         
