@@ -26,16 +26,6 @@ class VectorService:
         self._settings = get_settings()
         logger.info("Initializing Pinecone client with LangChain")
         
-        # Validate API key
-        if not self._settings.pinecone_api_key:
-            error_msg = (
-                "Pinecone API key is not configured. "
-                "Please set PINECONE_API_KEY in your .env file or environment variables. "
-                "Get your API key from https://www.pinecone.io/"
-            )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        
         # Initialize native Pinecone client for management operations
         self._pc = Pinecone(api_key=self._settings.pinecone_api_key)
         self._index_name = self._settings.pinecone_index_name

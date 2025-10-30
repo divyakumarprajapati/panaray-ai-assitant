@@ -1,15 +1,14 @@
 """Application configuration management."""
 from functools import lru_cache
-from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
     
-    # API Keys - Optional to allow app to start, but will raise errors when services try to use them
-    huggingface_api_key: Optional[str] = None
-    pinecone_api_key: Optional[str] = None
+    # API Keys (required - must be set in .env file or environment variables)
+    huggingface_api_key: str
+    pinecone_api_key: str
     
     # Pinecone Configuration
     pinecone_environment: str = "us-east-1"
