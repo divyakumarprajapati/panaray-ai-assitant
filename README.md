@@ -1,25 +1,29 @@
 # PANARAY Feature Assistant
 
-A production-ready, full-stack Web App Feature Assistant powered by RAG (Retrieval-Augmented Generation) with emotion-adaptive responses. Built following SOLID and DRY principles.
+A production-ready, full-stack Web App Feature Assistant powered by RAG (Retrieval-Augmented Generation) with emotion-adaptive responses. Built using **LangChain** and **LangGraph** for orchestration, following SOLID and DRY principles.
 
 ## 🎯 Features
 
 - **RAG-Powered Responses**: Answers questions using only the provided knowledge base via vector similarity search
+- **LangGraph Orchestration**: Stateful workflow management with clear node-based pipeline architecture
+- **LangChain Integration**: Seamless integration with LangChain ecosystem for embeddings, LLMs, and vector stores
 - **Emotion Detection**: Detects user emotions and adapts response tone accordingly
 - **Modern UI**: Beautiful, responsive interface built with React, TypeScript, and TailwindCSS
 - **Production-Ready**: Fully async backend with proper error handling and logging
-- **Vector Search**: Pinecone serverless for efficient similarity search
+- **Vector Search**: Pinecone serverless with LangChain integration for efficient similarity search
 - **Type-Safe**: Full TypeScript implementation on frontend
 
 ## 🏗️ Architecture
 
 ### Backend
 - **Framework**: FastAPI (Python 3.11+)
-- **Vector DB**: Pinecone (serverless)
-- **Embedding Model**: sentence-transformers/all-MiniLM-L6-v2 (384 dimensions)
-- **LLM**: Llama 3 (meta-llama/Meta-Llama-3-8B-Instruct) via Hugging Face Inference API
-- **Emotion Classifier**: distilbert-base-uncased-emotion (Hugging Face)
-- **Design**: SOLID principles, service layer architecture, dependency injection
+- **Orchestration**: LangGraph (state graph pattern for RAG pipeline)
+- **AI Framework**: LangChain (embeddings, LLM wrappers, vector store integration)
+- **Vector DB**: Pinecone (serverless) via LangChain integration
+- **Embedding Model**: sentence-transformers/all-MiniLM-L6-v2 (384 dimensions) via LangChain
+- **LLM**: Llama 3 (meta-llama/Meta-Llama-3-8B-Instruct) via LangChain HuggingFaceHub
+- **Emotion Classifier**: distilbert-base-uncased-emotion (Hugging Face Transformers)
+- **Design**: SOLID principles, LangGraph state graphs, service layer architecture, dependency injection
 
 ### Frontend
 - **Framework**: React 18 + Vite
@@ -316,14 +320,22 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 ## 📦 Dependencies
 
 ### Backend (Python)
-- fastapi - Web framework
-- uvicorn - ASGI server
-- pydantic - Data validation
-- sentence-transformers - Embedding generation
-- transformers - Emotion detection
-- torch - ML backend
-- pinecone-client - Vector database
-- httpx - Async HTTP client
+- **Core Framework**:
+  - fastapi - Web framework
+  - uvicorn - ASGI server
+  - pydantic - Data validation
+- **LangChain Ecosystem**:
+  - langchain - AI application framework
+  - langchain-community - Community integrations
+  - langchain-huggingface - HuggingFace embeddings integration
+  - langgraph - State graph workflow orchestration
+- **ML & AI**:
+  - transformers - Emotion detection (HuggingFace)
+  - torch - ML backend for transformers
+- **Vector Database**:
+  - pinecone-client - Vector database client
+- **Utilities**:
+  - httpx - Async HTTP client
 
 ### Frontend (Node.js)
 - react - UI framework

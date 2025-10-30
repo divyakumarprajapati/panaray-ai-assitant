@@ -2,7 +2,7 @@
 
 ## System Overview
 
-The PANARAY Feature Assistant is a full-stack RAG (Retrieval-Augmented Generation) system with emotion detection and adaptive responses.
+The PANARAY Feature Assistant is a full-stack RAG (Retrieval-Augmented Generation) system with emotion detection and adaptive responses. Built using **LangGraph** for state-based workflow orchestration and **LangChain** for AI component integration.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -31,10 +31,12 @@ The PANARAY Feature Assistant is a full-stack RAG (Retrieval-Augmented Generatio
      │     │     │      │
      ▼     ▼     ▼      ▼
   ┌────────────────────────────────────────────┐
-  │        External Services                   │
-  │  • Hugging Face API (LLM + Emotion)       │
-  │  • Sentence Transformers (Embeddings)     │
-  │  • Pinecone (Vector Database)             │
+  │        LangChain & External Services      │
+  │  • LangChain (AI Framework)             │
+  │  • LangGraph (Workflow Orchestration)   │
+  │  • Hugging Face API (LLM + Emotion)     │
+  │  • HuggingFace Embeddings               │
+  │  • Pinecone (Vector Database)           │
   └────────────────────────────────────────────┘
 ```
 
@@ -48,10 +50,12 @@ Each service follows the **Single Responsibility Principle**:
 
 **EmbeddingService** (`embedding_service.py`)
 ```
-Responsibility: Generate vector embeddings
-- Uses: sentence-transformers/all-MiniLM-L6-v2
-- Methods: generate_embedding(), generate_embeddings_batch()
+Responsibility: Generate vector embeddings using LangChain
+- Uses: LangChain HuggingFaceEmbeddings wrapper
+- Model: sentence-transformers/all-MiniLM-L6-v2
+- Methods: generate_embedding(), generate_embeddings_batch(), embeddings property
 - Output: 384-dimensional vectors
+- Integration: Seamless with LangChain ecosystem
 ```
 
 **EmotionService** (`emotion_service.py`)
@@ -65,30 +69,45 @@ Responsibility: Detect emotions from text
 
 **LLMService** (`llm_service.py`)
 ```
-Responsibility: Generate responses using LLM
-- Uses: Llama 3 via Hugging Face Inference API
-- Methods: generate_response(), _build_prompt()
-- Features: Context injection, tone adaptation
+Responsibility: Generate responses using LangChain LLM wrappers
+- Uses: LangChain HuggingFaceHub integration
+- Model: Llama 3 via Hugging Face Inference API
+- Components: PromptTemplate, LLMChain
+- Methods: generate_response(), llm/chain properties
+- Features: Context injection, tone adaptation, prompt templates
 ```
 
 **VectorService** (`vector_service.py`)
 ```
-Responsibility: Vector database operations
-- Uses: Pinecone serverless
-- Methods: upsert_vectors(), query_similar(), get_stats()
-- Features: Batch operations, similarity search
+Responsibility: Vector database operations with LangChain integration
+- Uses: LangChain Pinecone vectorstore wrapper + native Pinecone client
+- Methods: 
+  - Native: upsert_vectors(), query_similar(), get_stats()
+  - LangChain: get_vectorstore(), add_texts_with_langchain(), similarity_search_with_langchain()
+- Features: Batch operations, similarity search, dual-mode operation
 ```
 
-**RAGService** (`rag_service.py`)
+**RAGService** (`rag_service.py`) - **LangGraph Integration**
 ```
-Responsibility: Orchestrate the RAG pipeline
+Responsibility: Orchestrate RAG pipeline using LangGraph state graphs
+- Framework: LangGraph StateGraph pattern
 - Depends on: All other services (Dependency Injection)
-- Methods: process_query()
-- Pipeline:
-  1. Detect emotion
-  2. Generate query embedding
-  3. Retrieve similar documents
-  4. Generate response with adapted tone
+- State: RAGState (TypedDict with query, emotion, embeddings, docs, answer, etc.)
+- Methods: process_query(), visualize_graph()
+- Graph Nodes:
+  1. detect_emotion - Detect user emotion and determine tone
+  2. generate_embedding - Generate query embedding vector
+  3. retrieve_context - Search vector DB for similar docs
+  4. filter_results - Filter by similarity threshold
+  5. prepare_context - Format context for LLM
+  6. generate_response - LLM generates answer with tone
+  7. calculate_confidence - Calculate final confidence score
+- Features: 
+  - Stateful workflow management
+  - Clear separation of concerns
+  - Easy to visualize and debug
+  - Async execution support
+  - Error handling at each node
 ```
 
 #### 2. API Layer

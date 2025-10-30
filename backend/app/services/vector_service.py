@@ -1,6 +1,7 @@
-"""Vector database service using Pinecone."""
+"""Vector database service using LangChain Pinecone integration."""
 import logging
 from typing import List, Dict, Optional
+from langchain_community.vectorstores import Pinecone as LangChainPinecone
 from pinecone import Pinecone, ServerlessSpec
 import time
 
@@ -10,20 +11,30 @@ logger = logging.getLogger(__name__)
 
 
 class VectorService:
-    """Service for managing vector storage in Pinecone.
+    """Service for managing vector storage using LangChain Pinecone integration.
     
     Follows Single Responsibility Principle - only handles vector operations.
+    Now using LangChain's Pinecone wrapper for better integration with LangChain ecosystem.
     """
     
-    def __init__(self):
-        """Initialize Pinecone client and index."""
-        self._settings = get_settings()
-        logger.info("Initializing Pinecone client")
+    def __init__(self, embedding_service=None):
+        """Initialize Pinecone client and index with LangChain integration.
         
+        Args:
+            embedding_service: Optional EmbeddingService instance for LangChain integration
+        """
+        self._settings = get_settings()
+        logger.info("Initializing Pinecone client with LangChain")
+        
+        # Initialize native Pinecone client for management operations
         self._pc = Pinecone(api_key=self._settings.pinecone_api_key)
         self._index_name = self._settings.pinecone_index_name
         self._ensure_index_exists()
         self._index = self._pc.Index(self._index_name)
+        
+        # Store embedding service for LangChain integration
+        self._embedding_service = embedding_service
+        self._vectorstore = None
         
         logger.info(f"Vector service initialized with index: {self._index_name}")
     
@@ -48,6 +59,23 @@ class VectorService:
                 time.sleep(1)
             
             logger.info("Index created successfully")
+    
+    def get_vectorstore(self, embeddings):
+        """Get or create LangChain Pinecone vectorstore.
+        
+        Args:
+            embeddings: LangChain embeddings object
+            
+        Returns:
+            LangChain Pinecone vectorstore instance
+        """
+        if self._vectorstore is None:
+            self._vectorstore = LangChainPinecone(
+                index=self._index,
+                embedding=embeddings,
+                text_key="content"
+            )
+        return self._vectorstore
     
     def upsert_vectors(
         self,
@@ -90,13 +118,34 @@ class VectorService:
         logger.info(f"Successfully upserted {total_upserted} vectors")
         return total_upserted
     
+    def add_texts_with_langchain(
+        self,
+        texts: List[str],
+        metadatas: List[Dict],
+        embeddings
+    ) -> List[str]:
+        """Add texts using LangChain's vectorstore interface.
+        
+        Args:
+            texts: List of text documents
+            metadatas: List of metadata dictionaries
+            embeddings: LangChain embeddings object
+            
+        Returns:
+            List of document IDs
+        """
+        vectorstore = self.get_vectorstore(embeddings)
+        ids = vectorstore.add_texts(texts=texts, metadatas=metadatas)
+        logger.info(f"Added {len(ids)} texts via LangChain vectorstore")
+        return ids
+    
     def query_similar(
         self,
         query_vector: List[float],
         top_k: int = 3,
         filter_dict: Optional[Dict] = None
     ) -> List[Dict]:
-        """Query for similar vectors.
+        """Query for similar vectors using native Pinecone.
         
         Args:
             query_vector: Query embedding vector
@@ -124,6 +173,37 @@ class VectorService:
         
         logger.debug(f"Found {len(similar_docs)} similar documents")
         return similar_docs
+    
+    def similarity_search_with_langchain(
+        self,
+        query: str,
+        embeddings,
+        k: int = 3
+    ) -> List[Dict]:
+        """Similarity search using LangChain's vectorstore interface.
+        
+        Args:
+            query: Query text
+            embeddings: LangChain embeddings object
+            k: Number of results to return
+            
+        Returns:
+            List of documents with scores
+        """
+        vectorstore = self.get_vectorstore(embeddings)
+        results = vectorstore.similarity_search_with_score(query, k=k)
+        
+        # Format results
+        docs = []
+        for doc, score in results:
+            docs.append({
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+                "score": score
+            })
+        
+        logger.debug(f"Found {len(docs)} similar documents via LangChain")
+        return docs
     
     def delete_all(self):
         """Delete all vectors from the index."""

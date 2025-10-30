@@ -1,7 +1,9 @@
-"""LLM service for generating responses using Hugging Face Inference API."""
+"""LLM service using LangChain for response generation."""
 import logging
-import httpx
 from typing import List, Dict
+from langchain_community.llms import HuggingFaceHub
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 
 from ..config import get_settings
 
@@ -9,17 +11,67 @@ logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    """Service for generating responses using LLM.
+    """Service for generating responses using LangChain LLM wrappers.
     
     Follows Single Responsibility Principle - only handles LLM inference.
+    Now using LangChain's HuggingFaceHub integration for better composability.
     """
     
     def __init__(self):
-        """Initialize the LLM service."""
+        """Initialize the LLM service with LangChain."""
         self._settings = get_settings()
-        self._api_url = f"https://api-inference.huggingface.co/models/{self._settings.llm_model}"
-        self._headers = {"Authorization": f"Bearer {self._settings.huggingface_api_key}"}
-        logger.info(f"LLM service initialized with model: {self._settings.llm_model}")
+        logger.info(f"Initializing LLM service via LangChain: {self._settings.llm_model}")
+        
+        # Initialize LangChain HuggingFace LLM
+        self._llm = HuggingFaceHub(
+            repo_id=self._settings.llm_model,
+            huggingfacehub_api_token=self._settings.huggingface_api_key,
+            model_kwargs={
+                "temperature": 0.7,
+                "max_new_tokens": 300,
+                "top_p": 0.9,
+                "return_full_text": False
+            }
+        )
+        
+        # Create prompt template
+        self._prompt_template = self._create_prompt_template()
+        
+        # Create LLM chain
+        self._chain = LLMChain(
+            llm=self._llm,
+            prompt=self._prompt_template,
+            verbose=False
+        )
+        
+        logger.info("LLM service initialized successfully with LangChain")
+    
+    def _create_prompt_template(self) -> PromptTemplate:
+        """Create the prompt template for RAG.
+        
+        Returns:
+            LangChain PromptTemplate instance
+        """
+        template = """You are a helpful assistant specialized in William O'Neil + Co. PANARAY Datagraph™.
+
+CONTEXT:
+{context}
+
+INSTRUCTIONS:
+1. Answer the question ONLY using the information provided in the CONTEXT above
+2. If the context doesn't contain the answer, say "I don't have information about that in my knowledge base"
+3. Be {tone} in your response
+4. Keep the answer concise and accurate
+5. Do not make up information or use external knowledge
+
+QUESTION: {query}
+
+ANSWER:"""
+        
+        return PromptTemplate(
+            input_variables=["context", "tone", "query"],
+            template=template
+        )
     
     async def generate_response(
         self,
@@ -40,15 +92,17 @@ class LLMService:
         # Build context string from retrieved documents
         context_str = self._build_context(context)
         
-        # Build prompt with tone adaptation
-        prompt = self._build_prompt(query, context_str, tone)
-        
-        # Call Hugging Face Inference API
+        # Generate response using LangChain
         try:
-            response = await self._call_api(prompt)
-            return response
+            # Use the chain with await for async support
+            response = await self._chain.arun(
+                context=context_str,
+                tone=tone,
+                query=query
+            )
+            return response.strip()
         except Exception as e:
-            logger.error(f"Error generating response: {e}")
+            logger.error(f"Error generating response via LangChain: {e}")
             return "I apologize, but I'm having trouble generating a response right now. Please try again."
     
     def _build_context(self, context: List[Dict[str, str]]) -> str:
@@ -70,68 +124,20 @@ class LLMService:
         
         return "\n\n".join(context_parts)
     
-    def _build_prompt(self, query: str, context: str, tone: str) -> str:
-        """Build the prompt for the LLM.
+    @property
+    def llm(self):
+        """Get the underlying LangChain LLM object.
         
-        Args:
-            query: User's question
-            context: Retrieved context
-            tone: Tone adaptation instruction
-            
         Returns:
-            Formatted prompt
+            LangChain LLM instance
         """
-        prompt = f"""You are a helpful assistant specialized in William O'Neil + Co. PANARAY Datagraph™.
-
-CONTEXT:
-{context}
-
-INSTRUCTIONS:
-1. Answer the question ONLY using the information provided in the CONTEXT above
-2. If the context doesn't contain the answer, say "I don't have information about that in my knowledge base"
-3. Be {tone} in your response
-4. Keep the answer concise and accurate
-5. Do not make up information or use external knowledge
-
-QUESTION: {query}
-
-ANSWER:"""
-        
-        return prompt
+        return self._llm
     
-    async def _call_api(self, prompt: str) -> str:
-        """Call Hugging Face Inference API.
+    @property
+    def chain(self):
+        """Get the LangChain chain object.
         
-        Args:
-            prompt: Formatted prompt
-            
         Returns:
-            Generated text
+            LangChain LLMChain instance
         """
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 300,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "return_full_text": False
-            }
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                self._api_url,
-                headers=self._headers,
-                json=payload
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            
-            # Handle different response formats
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", "").strip()
-            elif isinstance(result, dict):
-                return result.get("generated_text", "").strip()
-            
-            return "Unable to generate response."
+        return self._chain
