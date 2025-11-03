@@ -104,7 +104,7 @@ VITE v5.x.x  ready in xxx ms
 
 1. Open http://localhost:5173 in your browser
 2. Try asking: "How do I open a Datagraph chart?"
-3. Watch the emotion detection and adaptive response!
+3. Get intelligent RAG-powered responses!
 
 ## Troubleshooting
 
