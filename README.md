@@ -1,13 +1,12 @@
 # PANARAY Feature Assistant
 
-A production-ready, full-stack Web App Feature Assistant powered by RAG (Retrieval-Augmented Generation) with emotion-adaptive responses. Built using **LangChain** and **LangGraph** for orchestration, following SOLID and DRY principles.
+A production-ready, full-stack Web App Feature Assistant powered by RAG (Retrieval-Augmented Generation). Built using **LangChain** and **LangGraph** for orchestration, following SOLID and DRY principles.
 
 ## 🎯 Features
 
 - **RAG-Powered Responses**: Answers questions using only the provided knowledge base via vector similarity search
 - **LangGraph Orchestration**: Stateful workflow management with clear node-based pipeline architecture
 - **LangChain Integration**: Seamless integration with LangChain ecosystem for embeddings, LLMs, and vector stores
-- **Emotion Detection**: Detects user emotions and adapts response tone accordingly
 - **Modern UI**: Beautiful, responsive interface built with React, TypeScript, and TailwindCSS
 - **Production-Ready**: Fully async backend with proper error handling and logging
 - **Vector Search**: Pinecone serverless with LangChain integration for efficient similarity search
@@ -22,7 +21,6 @@ A production-ready, full-stack Web App Feature Assistant powered by RAG (Retriev
 - **Vector DB**: Pinecone (serverless) via LangChain integration
 - **Embedding Model**: sentence-transformers/all-MiniLM-L6-v2 (384 dimensions) via LangChain
 - **LLM**: Llama 3 (meta-llama/Meta-Llama-3-8B-Instruct) via LangChain HuggingFaceHub
-- **Emotion Classifier**: distilbert-base-uncased-emotion via HuggingFace Inference API
 - **Design**: SOLID principles, LangGraph state graphs, service layer architecture, dependency injection
 - **No Heavy Dependencies**: Uses cloud APIs instead of local transformers/torch
 
@@ -40,7 +38,7 @@ A production-ready, full-stack Web App Feature Assistant powered by RAG (Retriev
 ├── backend/
 │   ├── app/
 │   │   ├── models/          # Pydantic schemas
-│   │   ├── services/        # Business logic (embedding, emotion, LLM, vector, RAG)
+│   │   ├── services/        # Business logic (embedding, LLM, vector, RAG)
 │   │   ├── api/             # API routes
 │   │   ├── utils/           # Utilities (data loader)
 │   │   ├── config.py        # Configuration management
@@ -153,7 +151,6 @@ Check service health and get indexed document count.
   "status": "healthy",
   "services": {
     "embedding": "operational",
-    "emotion": "operational",
     "llm": "operational",
     "vector_store": "operational",
     "indexed_documents": "58"
@@ -175,10 +172,6 @@ Query the assistant with a question.
 ```json
 {
   "answer": "To open a Datagraph chart for a symbol...",
-  "emotion": {
-    "emotion": "neutral",
-    "confidence": 0.95
-  },
   "sources_used": 3,
   "confidence": 0.87
 }
@@ -214,7 +207,6 @@ Index or reindex the knowledge base data.
 | `PINECONE_INDEX_NAME` | Index name | `feature-assistant` |
 | `EMBEDDING_MODEL` | Embedding model | `sentence-transformers/all-MiniLM-L6-v2` |
 | `LLM_MODEL` | LLM model | `meta-llama/Meta-Llama-3-8B-Instruct` |
-| `EMOTION_MODEL` | Emotion detection model | `bhadresh-savani/distilbert-base-uncased-emotion` |
 | `TOP_K_RESULTS` | Number of results to retrieve | `3` |
 | `SIMILARITY_THRESHOLD` | Minimum similarity score | `0.7` |
 
@@ -230,13 +222,11 @@ Index or reindex the knowledge base data.
 
 1. **Single Responsibility Principle**: Each service class has one responsibility
    - `EmbeddingService`: Only handles embedding generation
-   - `EmotionService`: Only handles emotion detection
    - `LLMService`: Only handles LLM inference
    - `VectorService`: Only handles vector operations
    - `RAGService`: Orchestrates the pipeline
 
 2. **Open/Closed Principle**: Services are extensible without modification
-   - New emotion mappings can be added
    - New models can be swapped via configuration
 
 3. **Liskov Substitution Principle**: Services can be replaced with compatible implementations
@@ -266,24 +256,8 @@ Try these questions to test the assistant:
 
 ### Expected Behavior
 
-- The assistant will detect your emotion from the query text
-- It will adapt its response tone based on the detected emotion
 - Responses are generated only from the provided knowledge base
-- The UI displays emotion, confidence, and number of sources used
-
-## 📊 Emotion Adaptation
-
-The system detects emotions and adapts tone:
-
-| Emotion | Tone |
-|---------|------|
-| Joy | Enthusiastic and positive |
-| Sadness | Empathetic and supportive |
-| Anger | Calm and understanding |
-| Fear | Reassuring and gentle |
-| Surprise | Informative and clear |
-| Love | Warm and friendly |
-| Neutral | Professional and straightforward |
+- The UI displays confidence and number of sources used
 
 ## 🔒 Security Considerations
 
@@ -335,7 +309,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 - **Utilities**:
   - requests - HTTP client for API calls
 
-**Note**: This implementation uses HuggingFace Inference API for all models (embeddings, LLM, emotion detection), eliminating the need for heavy local dependencies like `transformers` and `torch`. This makes the deployment lighter and faster.
+**Note**: This implementation uses HuggingFace Inference API for all models (embeddings, LLM), eliminating the need for heavy local dependencies like `transformers` and `torch`. This makes the deployment lighter and faster.
 
 ### Frontend (Node.js)
 - react - UI framework
@@ -350,9 +324,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 This is a production-ready template. To extend:
 
 1. Add more data to `backend/data/features.jsonl`
-2. Customize emotion mappings in `EmotionService`
-3. Add new UI components following the existing pattern
-4. Implement additional API endpoints in `backend/app/api/routes.py`
+2. Add new UI components following the existing pattern
+3. Implement additional API endpoints in `backend/app/api/routes.py`
 
 ## 📄 License
 

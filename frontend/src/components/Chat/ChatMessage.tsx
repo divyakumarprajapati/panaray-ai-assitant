@@ -3,7 +3,7 @@
  */
 
 import { Message } from '@/types';
-import { cn, formatTimestamp, getEmotionEmoji, getEmotionColor } from '@/lib/utils';
+import { cn, formatTimestamp } from '@/lib/utils';
 import { User, Bot, Clock, TrendingUp } from 'lucide-react';
 
 interface ChatMessageProps {
@@ -47,19 +47,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
         </div>
 
         {/* Metadata (only for assistant) */}
-        {!isUser && message.emotion && (
+        {!isUser && (message.sourcesUsed !== undefined || message.confidence !== undefined) && (
           <div className="flex flex-wrap gap-3 pt-2 text-xs border-t border-slate-200">
-            {/* Emotion */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">Emotion:</span>
-              <span className={cn('font-medium', getEmotionColor(message.emotion.emotion))}>
-                {getEmotionEmoji(message.emotion.emotion)} {message.emotion.emotion}
-              </span>
-              <span className="text-slate-400">
-                ({Math.round(message.emotion.confidence * 100)}%)
-              </span>
-            </div>
-
             {/* Sources */}
             {message.sourcesUsed !== undefined && (
               <div className="flex items-center gap-1.5">

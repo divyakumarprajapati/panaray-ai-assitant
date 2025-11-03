@@ -2,7 +2,7 @@
 
 ## System Overview
 
-The PANARAY Feature Assistant is a full-stack RAG (Retrieval-Augmented Generation) system with emotion detection and adaptive responses. Built using **LangGraph** for state-based workflow orchestration and **LangChain** for AI component integration.
+The PANARAY Feature Assistant is a full-stack RAG (Retrieval-Augmented Generation) system. Built using **LangGraph** for state-based workflow orchestration and **LangChain** for AI component integration.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -37,7 +37,6 @@ The PANARAY Feature Assistant is a full-stack RAG (Retrieval-Augmented Generatio
   │  • HuggingFace Inference API            │
   │    - LLM (Llama 3)                      │
   │    - Embeddings (all-MiniLM-L6-v2)      │
-  │    - Emotion Detection (DistilBERT)     │
   │  • Pinecone (Vector Database)           │
   └────────────────────────────────────────────┘
 ```
@@ -60,16 +59,6 @@ Responsibility: Generate vector embeddings using LangChain
 - Integration: Seamless with LangChain ecosystem
 ```
 
-**EmotionService** (`emotion_service.py`)
-```
-Responsibility: Detect emotions from text via HuggingFace Inference API
-- Uses: distilbert-base-uncased-emotion (via API, no local model)
-- Methods: detect_emotion(), detect_emotion_async(), get_tone_for_emotion()
-- Output: Emotion label + confidence score
-- Maps emotions to response tones
-- Benefits: No torch/transformers dependencies, lightweight deployment
-```
-
 **LLMService** (`llm_service.py`)
 ```
 Responsibility: Generate responses using LangChain LLM wrappers
@@ -77,7 +66,7 @@ Responsibility: Generate responses using LangChain LLM wrappers
 - Model: Llama 3 via Hugging Face Inference API
 - Components: PromptTemplate, LLMChain
 - Methods: generate_response(), llm/chain properties
-- Features: Context injection, tone adaptation, prompt templates
+- Features: Context injection, prompt templates
 ```
 
 **VectorService** (`vector_service.py`)
@@ -95,16 +84,15 @@ Responsibility: Vector database operations with LangChain integration
 Responsibility: Orchestrate RAG pipeline using LangGraph state graphs
 - Framework: LangGraph StateGraph pattern
 - Depends on: All other services (Dependency Injection)
-- State: RAGState (TypedDict with query, emotion, embeddings, docs, answer, etc.)
+- State: RAGState (TypedDict with query, embeddings, docs, answer, etc.)
 - Methods: process_query(), visualize_graph()
 - Graph Nodes:
-  1. detect_emotion - Detect user emotion and determine tone
-  2. generate_embedding - Generate query embedding vector
-  3. retrieve_context - Search vector DB for similar docs
-  4. filter_results - Filter by similarity threshold
-  5. prepare_context - Format context for LLM
-  6. generate_response - LLM generates answer with tone
-  7. calculate_confidence - Calculate final confidence score
+  1. generate_embedding - Generate query embedding vector
+  2. retrieve_context - Search vector DB for similar docs
+  3. filter_results - Filter by similarity threshold
+  4. prepare_context - Format context for LLM
+  5. generate_response - LLM generates answer
+  6. calculate_confidence - Calculate final confidence score
 - Features: 
   - Stateful workflow management
   - Clear separation of concerns
@@ -129,8 +117,7 @@ Endpoints:
 ```
 Pydantic v2 schemas for validation:
 - QueryRequest, QueryResponse
-- EmotionResult
-- HealthResponse, IndexDataResponse
+- HealthResponse
 ```
 
 **Configuration** (`config.py`)
@@ -170,7 +157,7 @@ App.tsx
     │   └── ChatMessage[] (mapped)
     │       ├── Avatar (User/Bot)
     │       ├── Content
-    │       └── Metadata (emotion, sources, confidence)
+    │       └── Metadata (sources, confidence)
     │
     └── ChatInput
         ├── Input
@@ -249,9 +236,6 @@ Built with **Radix UI** primitives for accessibility:
    │
    ├─→ RAGService: rag_service.py
    │   │
-   │   ├─→ EmotionService
-   │   │   └─→ Detect emotion + confidence
-   │   │
    │   ├─→ EmbeddingService
    │   │   └─→ Generate query vector
    │   │
@@ -259,11 +243,10 @@ Built with **Radix UI** primitives for accessibility:
    │   │   └─→ Query Pinecone for similar docs
    │   │
    │   └─→ LLMService
-   │       └─→ Generate response with context + tone
+   │       └─→ Generate response with context
    │
    ├─→ Response: QueryResponse
    │   ├─→ answer: string
-   │   ├─→ emotion: EmotionResult
    │   ├─→ sources_used: int
    │   └─→ confidence: float
    │
@@ -306,7 +289,6 @@ RAGService receives all dependencies in constructor:
 def __init__(
     self,
     embedding_service: EmbeddingService,
-    emotion_service: EmotionService,
     llm_service: LLMService,
     vector_service: VectorService
 )
@@ -472,15 +454,13 @@ Benefits:
 - **Query latency**: 2-5 seconds (depends on LLM API)
 - **Embedding generation**: ~100ms per query
 - **Vector search**: ~50ms
-- **Emotion detection**: ~200ms
 
 ### Optimization Opportunities
 
-1. **Parallel Operations**: Run emotion detection + embedding in parallel
-2. **Model Caching**: Cache model instances
-3. **Batch Processing**: Process multiple queries together
-4. **CDN**: Serve frontend from CDN
-5. **Database Indexes**: Optimize Pinecone queries
+1. **Model Caching**: Cache model instances
+2. **Batch Processing**: Process multiple queries together
+3. **CDN**: Serve frontend from CDN
+4. **Database Indexes**: Optimize Pinecone queries
 
 ## Testing Strategy
 

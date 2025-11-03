@@ -121,49 +121,19 @@ response = await self._chain.arun(context=context, tone=tone, query=query)
 - Better error handling
 - Easier to extend with tools/agents
 
-### 5. Emotion Service (`emotion_service.py`)
-
-**Before:**
-```python
-from transformers import pipeline
-self._classifier = pipeline("text-classification", model=model_name)
-results = self._classifier(text)
-```
-
-**After:**
-```python
-import asyncio
-import requests
-# Direct HuggingFace Inference API calls
-def _make_request():
-    response = requests.post(api_url, json={"inputs": text}, timeout=10.0)
-    return response.json()
-
-results = await asyncio.to_thread(_make_request)
-```
-
-**Benefits:**
-- **No torch/transformers dependency** (~600MB saved)
-- No model loading time
-- Less memory usage
-- API handles scaling
-
-### 6. RAG Service (`rag_service.py`) - **Major Refactor**
+### 5. RAG Service (`rag_service.py`) - **Major Refactor**
 
 **Before: Sequential Pipeline**
 ```python
 def process_query(self, query: str) -> QueryResponse:
-    # Step 1: Detect emotion
-    emotion_result = self._emotion_service.detect_emotion(query)
-    
-    # Step 2: Generate embedding
+    # Step 1: Generate embedding
     query_embedding = self._embedding_service.generate_embedding(query)
     
-    # Step 3: Retrieve context
+    # Step 2: Retrieve context
     similar_docs = self._vector_service.query_similar(query_embedding)
     
-    # Step 4: Generate response
-    answer = await self._llm_service.generate_response(query, context, tone)
+    # Step 3: Generate response
+    answer = await self._llm_service.generate_response(query, context)
     
     return QueryResponse(...)
 ```
@@ -175,7 +145,6 @@ from typing import TypedDict
 
 class RAGState(TypedDict):
     query: str
-    emotion: EmotionResult
     tone: str
     query_embedding: list[float]
     retrieved_docs: list[Dict]
@@ -189,7 +158,6 @@ def _build_graph(self) -> StateGraph:
     workflow = StateGraph(RAGState)
     
     # Add nodes for each step
-    workflow.add_node("detect_emotion", self._detect_emotion_node)
     workflow.add_node("generate_embedding", self._generate_embedding_node)
     workflow.add_node("retrieve_context", self._retrieve_context_node)
     workflow.add_node("filter_results", self._filter_results_node)
@@ -198,8 +166,7 @@ def _build_graph(self) -> StateGraph:
     workflow.add_node("calculate_confidence", self._calculate_confidence_node)
     
     # Define edges (workflow)
-    workflow.set_entry_point("detect_emotion")
-    workflow.add_edge("detect_emotion", "generate_embedding")
+    workflow.set_entry_point("generate_embedding")
     workflow.add_edge("generate_embedding", "retrieve_context")
     # ... more edges
     workflow.add_edge("calculate_confidence", END)
@@ -227,11 +194,6 @@ async def process_query(self, query: str) -> QueryResponse:
 ## 📊 Visual: LangGraph Pipeline
 
 ```
-┌─────────────────┐
-│  detect_emotion │ ──→ Detect user emotion and determine tone
-└────────┬────────┘
-         │
-         ▼
 ┌─────────────────────┐
 │ generate_embedding  │ ──→ Generate query embedding vector
 └─────────┬───────────┘
@@ -293,7 +255,6 @@ async def process_query(self, query: str) -> QueryResponse:
 - ✅ Refactored EmbeddingService to use LangChain
 - ✅ Refactored VectorService with LangChain integration
 - ✅ Refactored LLMService to use LangChain chains
-- ✅ Refactored EmotionService to use HuggingFace API
 - ✅ Rewrote RAGService using LangGraph
 - ✅ Verified API routes compatibility
 - ✅ Updated documentation
@@ -335,7 +296,6 @@ With LangGraph, we can now easily add:
 
 **A (Before):** torch was installed as a required dependency for:
 - `sentence-transformers` (embedding generation)
-- `transformers` (emotion detection)
 
 These libraries used PyTorch as their ML backend to run neural networks locally.
 
@@ -343,9 +303,8 @@ These libraries used PyTorch as their ML backend to run neural networks locally.
 
 Now we use:
 - **LangChain HuggingFaceEmbeddings** - Still uses sentence-transformers under the hood, but managed by LangChain
-- **HuggingFace Inference API** - For emotion detection, eliminating local transformers/torch
 
-This makes the deployment **~600MB lighter** and **5x faster to start**!
+This makes the deployment lighter and faster to start!
 
 ---
 
