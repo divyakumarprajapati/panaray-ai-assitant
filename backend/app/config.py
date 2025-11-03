@@ -18,7 +18,6 @@ class Settings(BaseSettings):
     # Model Configuration
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     llm_model: str = "meta-llama/llama-3.1-8b-instruct"
-    emotion_model: str = "bhadresh-savani/distilbert-base-uncased-emotion"
     
     # API Configuration
     api_title: str = "Feature Assistant API"

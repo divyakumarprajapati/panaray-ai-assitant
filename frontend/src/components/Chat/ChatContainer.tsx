@@ -69,8 +69,7 @@ export function ChatContainer({
                 Welcome to PANARAY Feature Assistant
               </h3>
               <p className="text-slate-500 max-w-md">
-                Ask me anything about PANARAY Datagraph features. I'll answer based on the product documentation
-                and adapt my tone to your emotion.
+                Ask me anything about PANARAY Datagraph features. I'll answer based on the product documentation.
               </p>
             </div>
           ) : (

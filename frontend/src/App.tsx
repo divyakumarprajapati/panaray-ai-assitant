@@ -39,7 +39,7 @@ function App() {
                 PANARAY Feature Assistant
               </h1>
               <p className="text-sm text-slate-600 mt-1">
-                RAG-powered assistant with emotion-adaptive responses
+                RAG-powered assistant for product features
               </p>
             </div>
             
