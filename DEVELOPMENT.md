@@ -69,7 +69,6 @@ backend/
 │   ├── services/             # Business logic (SOLID)
 │   │   ├── __init__.py
 │   │   ├── embedding_service.py    # Sentence Transformers
-│   │   ├── emotion_service.py      # Emotion detection
 │   │   ├── llm_service.py          # Llama 3 inference
 │   │   ├── vector_service.py       # Pinecone operations
 │   │   └── rag_service.py          # RAG orchestration
@@ -492,16 +491,6 @@ print(response)
 
 2. Adjust prompt template in `llm_service.py` if needed
 
-### Add New Emotion
-
-1. Edit `emotion_service.py`:
-   ```python
-   EMOTION_TO_TONE = {
-       # ... existing emotions
-       "excitement": "energetic and motivating",
-   }
-   ```
-
 ### Customize UI Theme
 
 1. Edit `frontend/tailwind.config.js`:
@@ -527,10 +516,8 @@ print(response)
 **Solution**: Pre-download models:
 ```python
 from sentence_transformers import SentenceTransformer
-from transformers import pipeline
 
 SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-pipeline('text-classification', model='bhadresh-savani/distilbert-base-uncased-emotion')
 ```
 
 **Problem**: Pinecone index errors

@@ -8,7 +8,6 @@ from .config import get_settings
 from .api import router
 from .services import (
     EmbeddingService,
-    EmotionService,
     LLMService,
     VectorService,
     RAGService
@@ -32,12 +31,10 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing services...")
     try:
         embedding_service = EmbeddingService()
-        emotion_service = EmotionService()
         llm_service = LLMService()
         vector_service = VectorService()
         rag_service = RAGService(
             embedding_service=embedding_service,
-            emotion_service=emotion_service,
             llm_service=llm_service,
             vector_service=vector_service
         )
@@ -45,7 +42,6 @@ async def lifespan(app: FastAPI):
         # Store services in app state
         app.state.services = {
             "embedding": embedding_service,
-            "emotion": emotion_service,
             "llm": llm_service,
             "vector": vector_service,
             "rag": rag_service

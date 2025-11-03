@@ -5,10 +5,9 @@ from langgraph.graph import StateGraph, END
 import operator
 
 from .embedding_service import EmbeddingService
-from .emotion_service import EmotionService
 from .llm_service import LLMService
 from .vector_service import VectorService
-from ..models.schemas import QueryResponse, EmotionResult
+from ..models.schemas import QueryResponse
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -21,8 +20,6 @@ class RAGState(TypedDict):
     This defines all the data that flows through the LangGraph nodes.
     """
     query: str
-    emotion: EmotionResult
-    tone: str
     query_embedding: list[float]
     retrieved_docs: list[Dict]
     filtered_docs: list[Dict]
@@ -46,7 +43,6 @@ class RAGService:
     def __init__(
         self,
         embedding_service: EmbeddingService,
-        emotion_service: EmotionService,
         llm_service: LLMService,
         vector_service: VectorService
     ):
@@ -54,12 +50,10 @@ class RAGService:
         
         Args:
             embedding_service: Service for generating embeddings
-            emotion_service: Service for detecting emotions
             llm_service: Service for generating responses
             vector_service: Service for vector operations
         """
         self._embedding_service = embedding_service
-        self._emotion_service = emotion_service
         self._llm_service = llm_service
         self._vector_service = vector_service
         self._settings = get_settings()
@@ -79,7 +73,6 @@ class RAGService:
         workflow = StateGraph(RAGState)
         
         # Add nodes for each step in the pipeline
-        workflow.add_node("detect_emotion", self._detect_emotion_node)
         workflow.add_node("generate_embedding", self._generate_embedding_node)
         workflow.add_node("retrieve_context", self._retrieve_context_node)
         workflow.add_node("filter_results", self._filter_results_node)
@@ -88,8 +81,7 @@ class RAGService:
         workflow.add_node("calculate_confidence", self._calculate_confidence_node)
         
         # Define the workflow edges (execution order)
-        workflow.set_entry_point("detect_emotion")
-        workflow.add_edge("detect_emotion", "generate_embedding")
+        workflow.set_entry_point("generate_embedding")
         workflow.add_edge("generate_embedding", "retrieve_context")
         workflow.add_edge("retrieve_context", "filter_results")
         workflow.add_edge("filter_results", "prepare_context")
@@ -101,28 +93,6 @@ class RAGService:
         return workflow.compile()
     
     # Node functions for the LangGraph workflow
-    
-    def _detect_emotion_node(self, state: RAGState) -> Dict:
-        """Node: Detect emotion from query and determine tone.
-        
-        Args:
-            state: Current RAG state
-            
-        Returns:
-            Updated state with emotion and tone
-        """
-        logger.info("Node: Detecting emotion")
-        query = state["query"]
-        
-        emotion_result = self._emotion_service.detect_emotion(query)
-        tone = self._emotion_service.get_tone_for_emotion(emotion_result.emotion)
-        
-        logger.info(f"Detected emotion: {emotion_result.emotion} (tone: {tone})")
-        
-        return {
-            "emotion": emotion_result,
-            "tone": tone
-        }
     
     def _generate_embedding_node(self, state: RAGState) -> Dict:
         """Node: Generate embedding for the query.
@@ -210,7 +180,7 @@ class RAGService:
         }
     
     async def _generate_response_node(self, state: RAGState) -> Dict:
-        """Node: Generate response using LLM with context and tone.
+        """Node: Generate response using LLM with context.
         
         Args:
             state: Current RAG state
@@ -221,12 +191,10 @@ class RAGService:
         logger.info("Node: Generating response")
         query = state["query"]
         context = state["context"]
-        tone = state["tone"]
         
         answer = await self._llm_service.generate_response(
             query=query,
-            context=context,
-            tone=tone
+            context=context
         )
         
         return {
@@ -267,8 +235,6 @@ class RAGService:
         # Initialize state
         initial_state: RAGState = {
             "query": query,
-            "emotion": None,
-            "tone": "",
             "query_embedding": [],
             "retrieved_docs": [],
             "filtered_docs": [],
@@ -288,7 +254,6 @@ class RAGService:
             # Build and return response
             return QueryResponse(
                 answer=final_state["answer"],
-                emotion=final_state["emotion"],
                 sources_used=final_state["sources_used"],
                 confidence=final_state["confidence"]
             )
@@ -299,7 +264,6 @@ class RAGService:
             # Return error response
             return QueryResponse(
                 answer=f"I apologize, but I encountered an error processing your request: {str(e)}",
-                emotion=EmotionResult(emotion="neutral", confidence=1.0),
                 sources_used=0,
                 confidence=0.0
             )
@@ -329,40 +293,35 @@ class RAGService:
         return """
 LangGraph RAG Pipeline:
 
-┌─────────────────┐
-│  detect_emotion │ (Detect user emotion and determine tone)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────┐
-│ generate_embedding  │ (Generate query embedding vector)
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  retrieve_context   │ (Search vector DB for similar docs)
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   filter_results    │ (Filter by similarity threshold)
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  prepare_context    │ (Format context for LLM)
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ generate_response   │ (LLM generates answer with tone)
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│calculate_confidence │ (Calculate final confidence score)
-└─────────┬───────────┘
-          │
-          ▼
+???????????????????????
+? generate_embedding  ? (Generate query embedding vector)
+???????????????????????
+          ?
+          ?
+???????????????????????
+?  retrieve_context   ? (Search vector DB for similar docs)
+???????????????????????
+          ?
+          ?
+???????????????????????
+?   filter_results    ? (Filter by similarity threshold)
+???????????????????????
+          ?
+          ?
+???????????????????????
+?  prepare_context    ? (Format context for LLM)
+???????????????????????
+          ?
+          ?
+???????????????????????
+? generate_response   ? (LLM generates answer)
+???????????????????????
+          ?
+          ?
+???????????????????????
+?calculate_confidence ? (Calculate final confidence score)
+???????????????????????
+          ?
+          ?
         [END]
 """

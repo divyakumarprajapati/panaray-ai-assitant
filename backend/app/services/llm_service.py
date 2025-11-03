@@ -34,12 +34,11 @@ class LLMService:
         
         logger.info("LLM service initialized successfully with direct API")
     
-    def _create_prompt(self, context: str, tone: str, query: str) -> str:
+    def _create_prompt(self, context: str, query: str) -> str:
         """Create the prompt for RAG.
         
         Args:
             context: Formatted context string
-            tone: Tone description based on detected emotion
             query: User's question
             
         Returns:
@@ -53,9 +52,8 @@ CONTEXT:
 INSTRUCTIONS:
 1. Answer the question ONLY using the information provided in the CONTEXT above
 2. If the context doesn't contain the answer, say "I don't have information about that in my knowledge base"
-3. Be {tone} in your response
-4. Keep the answer concise and accurate
-5. Do not make up information or use external knowledge
+3. Keep the answer concise and accurate
+4. Do not make up information or use external knowledge
 
 QUESTION: {query}
 
@@ -65,15 +63,13 @@ ANSWER:"""
     async def generate_response(
         self,
         query: str,
-        context: List[Dict[str, str]],
-        tone: str
+        context: List[Dict[str, str]]
     ) -> str:
-        """Generate a response using retrieved context and emotion-adapted tone.
+        """Generate a response using retrieved context.
         
         Args:
             query: User's question
             context: List of relevant context documents
-            tone: Tone description based on detected emotion
             
         Returns:
             Generated response string
@@ -82,7 +78,7 @@ ANSWER:"""
         context_str = self._build_context(context)
         
         # Create prompt
-        prompt = self._create_prompt(context_str, tone, query)
+        prompt = self._create_prompt(context_str, query)
         
         # Call Hugging Face API directly using OpenAI-compatible chat completions API
         def _make_request():

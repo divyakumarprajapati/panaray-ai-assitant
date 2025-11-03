@@ -45,7 +45,6 @@ async def health_check(request: Request) -> HealthResponse:
             status="healthy",
             services={
                 "embedding": "operational",
-                "emotion": "operational",
                 "llm": "operational",
                 "vector_store": "operational",
                 "indexed_documents": str(stats.get("total_vectors", 0))

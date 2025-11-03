@@ -45,7 +45,6 @@ export function useChat(): UseChatReturn {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: response.answer,
-        emotion: response.emotion,
         sourcesUsed: response.sources_used,
         confidence: response.confidence,
         timestamp: new Date(),
